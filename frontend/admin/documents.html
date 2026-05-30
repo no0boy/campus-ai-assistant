@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知识库管理 - 校园AI助手后台</title>
+  <link rel="stylesheet" href="../student/css/style.css">
+  <style>
+    .admin-layout { display: flex; min-height: 100vh; }
+    .admin-nav {
+      width: 220px; background: #1e293b; color: #e2e8f0;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    .admin-nav .brand {
+      padding: 20px; font-size: 17px; font-weight: 700;
+      color: #fff; border-bottom: 1px solid #334155;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; font-size: 14px; color: #94a3b8;
+      text-decoration: none; transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+    .nav-item.active { color: #fff; background: rgba(37,99,235,0.15); border-left-color: #3b82f6; }
+
+    .admin-main { flex: 1; background: #f8fafc; min-width: 0; }
+    .admin-topbar {
+      background: #fff; border-bottom: 1px solid #e2e8f0;
+      padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .admin-body { padding: 24px; }
+
+    /* 上传区域 */
+    .upload-zone {
+      background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px;
+      padding: 40px; text-align: center; margin-bottom: 24px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .upload-zone:hover { border-color: #3b82f6; background: #f8fafc; }
+    .upload-zone .icon { font-size: 40px; margin-bottom: 8px; }
+    .upload-zone p { color: #94a3b8; font-size: 14px; }
+    .upload-zone .hint { font-size: 12px; color: #cbd5e1; margin-top: 4px; }
+    .upload-zone input[type="file"] { display: none; }
+
+    /* 文档列表 */
+    .doc-list { display: flex; flex-direction: column; gap: 8px; }
+    .doc-item {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+      padding: 16px 20px; display: flex; align-items: center; gap: 16px;
+    }
+    .doc-icon {
+      width: 44px; height: 44px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .doc-icon.pdf { background: #fef2f2; }
+    .doc-icon.txt { background: #f0fdf4; }
+    .doc-info { flex: 1; min-width: 0; }
+    .doc-info .name { font-size: 14px; font-weight: 500; color: #1e293b; }
+    .doc-info .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+    .doc-status {
+      font-size: 12px; padding: 4px 12px; border-radius: 20px;
+      font-weight: 500;
+    }
+    .doc-status.ready { background: #f0fdf4; color: #16a34a; }
+    .doc-status.processing { background: #fefce8; color: #ca8a04; }
+    .btn-danger { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+    .btn-danger:hover { background: #fecaca; }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .admin-nav { width: 60px; }
+      .admin-nav .brand span, .nav-item span { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="admin-layout">
+
+  <nav class="admin-nav">
+    <div class="brand">🤖 <span>AI助手后台</span></div>
+    <a class="nav-item" href="index.html">📊 <span>数据看板</span></a>
+    <a class="nav-item active" href="documents.html">📁 <span>知识库管理</span></a>
+    <a class="nav-item" href="settings.html">⚙️ <span>模型配置</span></a>
+    <div style="margin-top:auto;padding:12px 20px;border-top:1px solid #334155;">
+      <a class="nav-item" href="../student/index.html" style="padding:8px 0;">← <span>返回学生端</span></a>
+      <a class="nav-item" href="#" onclick="logout()" style="padding:8px 0;color:#f87171;">🚪 <span>退出登录</span></a>
+    </div>
+  </nav>
+
+  <main class="admin-main">
+    <div class="admin-topbar">
+      <h2>📁 知识库管理</h2>
+      <span style="font-size:13px;color:#94a3b8;" id="docCount">共 0 份文档</span>
+    </div>
+
+    <div class="admin-body">
+
+      <!-- 上传区域 -->
+      <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📤</div>
+        <p>点击上传校园文档（PDF / TXT）</p>
+        <div class="hint">支持：学生手册、选课指南、奖助学金说明、军训手册等</div>
+        <input type="file" id="fileInput" accept=".pdf,.txt"
+               onchange="uploadDocument()" multiple>
+      </div>
+
+      <!-- 上传进度 -->
+      <div id="uploadProgress" style="display:none;margin-bottom:16px;padding:12px 16px;background:#eff6ff;border-radius:8px;font-size:13px;color:#2563eb;">
+        正在上传并解析文档...
+      </div>
+
+      <!-- 文档列表 -->
+      <div class="doc-list" id="docList">
+        <div style="text-align:center;padding:40px;color:#94a3b8;">
+          暂无文档，上传校园知识文档开始构建知识库
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script src="../student/js/api.js"></script>
+<script>
+  if (!localStorage.getItem('token')) {
+    window.location.href = 'login.html'
+  }
+
+  // ========== 加载文档列表 ==========
+  async function loadDocuments() {
+    const el = document.getElementById('docList')
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">加载中...</div>'
+
+    try {
+      const res = await apiGetDocuments()
+      if (res.code === 0 && res.data && res.data.length > 0) {
+        document.getElementById('docCount').textContent = `共 ${res.data.length} 份文档`
+        el.innerHTML = res.data.map(doc => {
+          const isPDF = (doc.file_type || '').toLowerCase() === 'pdf'
+          return `
+            <div class="doc-item">
+              <div class="doc-icon ${isPDF ? 'pdf' : 'txt'}">
+                ${isPDF ? '📕' : '📄'}
+              </div>
+              <div class="doc-info">
+                <div class="name">${escapeHtml(doc.title)}</div>
+                <div class="meta">
+                  ${doc.file_type || '未知'} ·
+                  切片数：${doc.chunk_count || 0} ·
+                  上传时间：${doc.created_at || '-'}
+                </div>
+              </div>
+              <span class="doc-status ready">✅ 已就绪</span>
+              <button class="btn btn-danger btn-sm" onclick="deleteDoc('${doc.id}')">🗑️ 删除</button>
+            </div>
+          `
+        }).join('')
+      } else {
+        document.getElementById('docCount').textContent = '共 0 份文档'
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">暂无文档，上传校园知识文档开始构建知识库</div>'
+      }
+    } catch (e) {
+      el.innerHTML = '<div style="text-align:center;padding:20px;color:#dc2626;">⚠️ 加载失败，请检查后端服务</div>'
+    }
+  }
+
+  loadDocuments()
+
+  // ========== 上传文档 ==========
+  async function uploadDocument() {
+    const fileInput = document.getElementById('fileInput')
+    const files = fileInput.files
+    if (!files.length) return
+
+    const progressEl = document.getElementById('uploadProgress')
+
+    for (const file of files) {
+      progressEl.style.display = 'block'
+      progressEl.textContent = `正在上传并解析：${file.name}...`
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await fetch('http://127.0.0.1:8001/api/documents/upload', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        })
+        const data = await res.json()
+
+        if (data.code === 0) {
+          progressEl.textContent = `✅ ${file.name} 上传成功！已自动切片并向量化`
+          progressEl.style.background = '#f0fdf4'
+          progressEl.style.color = '#16a34a'
+        } else {
+          progressEl.textContent = `❌ ${file.name} 上传失败：${data.message || '未知错误'}`
+          progressEl.style.background = '#fef2f2'
+          progressEl.style.color = '#dc2626'
+        }
+      } catch (e) {
+        progressEl.textContent = `❌ ${file.name} 上传失败：网络异常`
+        progressEl.style.background = '#fef2f2'
+        progressEl.style.color = '#dc2626'
+      }
+    }
+
+    // 重置文件选择器
+    fileInput.value = ''
+
+    // 重新加载列表
+    setTimeout(() => {
+      progressEl.style.display = 'none'
+      progressEl.style.background = '#eff6ff'
+      progressEl.style.color = '#2563eb'
+      loadDocuments()
+    }, 2000)
+  }
+
+  // ========== 删除文档 ==========
+  async function deleteDoc(id) {
+    if (!confirm('确定要删除这个文档吗？知识库中的向量数据也会被移除。')) return
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8001/api/documents/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      })
+      const data = await res.json()
+
+      if (data.code === 0) {
+        alert('删除成功')
+        loadDocuments()
+      } else {
+        alert('删除失败：' + (data.message || '未知错误'))
+      }
+    } catch (e) {
+      alert('网络异常，请检查后端服务')
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div')
+    div.textContent = str
+    return div.innerHTML
+  }
+
+  function logout() {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    window.location.href = 'login.html'
+  }
+</script>
+</body>
+</html>

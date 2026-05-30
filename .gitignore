@@ -1,0 +1,47 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+*.egg
+
+# ===== 环境变量 & API Key（绝对不能上传！）=====
+.env
+*.env
+config.py    # 包含 API Key，用 config.example.py 替代
+
+# ===== 数据库 & 向量库（本地数据不上传）=====
+*.db
+*.sqlite3
+chroma_data/
+
+# ===== 上传文件 =====
+uploads/
+!uploads/.gitkeep
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== Claude Code =====
+.claude/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Node（如果有）=====
+node_modules/
+package-lock.json
+
+# ===== 临时文件 =====
+*.log
+*.tmp
+model_settings.json

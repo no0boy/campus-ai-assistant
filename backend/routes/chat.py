@@ -1,0 +1,143 @@
+"""
+聊天模块 — AI 问答接口（支持 SSE 流式输出）
+"""
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import Optional
+import json
+
+from routes.auth import get_current_user
+from database import get_db, User, Conversation
+from services.rag_service import ask, ask_stream
+from sqlalchemy.orm import Session
+
+router = APIRouter(prefix="/api/chat", tags=["聊天"])
+
+
+class AskRequest(BaseModel):
+    question: str
+    conversation_id: Optional[str] = None
+    stream: bool = False
+
+
+@router.post("/ask")
+def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """AI 问答接口（支持 SSE 流式）"""
+
+    # 获取历史对话
+    history = []
+    if req.conversation_id:
+        records = db.query(Conversation)\
+            .filter(Conversation.conversation_id == req.conversation_id)\
+            .order_by(Conversation.created_at.asc())\
+            .all()
+        for r in records:
+            history.append({"role": "user", "content": r.question})
+            history.append({"role": "ai", "content": r.answer})
+
+    # 流式输出
+    if req.stream:
+        def generate():
+            full_answer = ""
+            sources = []
+            search_method = "vector"
+            llm_available = True
+
+            for chunk in ask_stream(req.question, history):
+                kind = chunk.get("type")
+
+                if kind == "meta":
+                    sources = chunk.get("sources", [])
+                    search_method = chunk.get("search_method", "vector")
+                    yield f"data: {json.dumps({'type':'meta','sources':len(sources),'search_method':search_method}, ensure_ascii=False)}\n\n"
+
+                elif kind == "chunk":
+                    text = chunk.get("text", "")
+                    full_answer += text
+                    yield f"data: {json.dumps({'type':'chunk','text':text}, ensure_ascii=False)}\n\n"
+
+                elif kind == "error":
+                    llm_available = False
+                    yield f"data: {json.dumps({'type':'error','msg':chunk.get('msg','')}, ensure_ascii=False)}\n\n"
+
+                elif kind == "done":
+                    # 保存对话
+                    conv = Conversation(
+                        user_id=user.id,
+                        conversation_id=req.conversation_id or f"conv_{user.id}_{hash(req.question)}",
+                        question=req.question,
+                        answer=full_answer,
+                        sources=sources
+                    )
+                    db.add(conv)
+                    db.commit()
+
+                    yield f"data: {json.dumps({'type':'done','conversation_id':conv.conversation_id,'sources':[{'title':s['title'],'content':s['content'][:300]} for s in sources],'search_method':search_method,'llm_available':llm_available}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
+
+    # 普通模式
+    result = ask(req.question, history)
+    conv = Conversation(
+        user_id=user.id,
+        conversation_id=req.conversation_id or f"conv_{user.id}_{hash(req.question)}",
+        question=req.question,
+        answer=result["answer"],
+        sources=result["sources"]
+    )
+    db.add(conv)
+    db.commit()
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "answer": result["answer"],
+            "sources": [{"title": s["title"], "content": s["content"][:300], "score": s["score"]} for s in result["sources"]],
+            "is_fallback": result["is_fallback"],
+            "search_method": result["search_method"],
+            "llm_available": result["llm_available"],
+            "conversation_id": conv.conversation_id
+        }
+    }
+
+
+@router.get("/history")
+def get_history(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """获取用户对话历史"""
+    records = db.query(Conversation)\
+        .filter(Conversation.user_id == user.id)\
+        .order_by(Conversation.created_at.desc())\
+        .all()
+
+    conversations = {}
+    for r in records:
+        cid = r.conversation_id
+        if cid not in conversations:
+            conversations[cid] = {
+                "conversation_id": cid,
+                "title": r.question[:30] + ("..." if len(r.question) > 30 else ""),
+                "messages": [],
+                "created_at": r.created_at.isoformat() if r.created_at else ""
+            }
+        conversations[cid]["messages"].append({"role": "user", "content": r.question})
+        conversations[cid]["messages"].append({
+            "role": "ai", "content": r.answer, "sources": r.sources, "feedback": r.feedback
+        })
+
+    return {"code": 0, "data": list(conversations.values())}
+
+
+@router.post("/feedback")
+def feedback(conversation_id: str, message_id: int, feedback_value: int,
+             user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    conv = db.query(Conversation).filter(
+        Conversation.id == message_id, Conversation.user_id == user.id
+    ).first()
+    if not conv:
+        return {"code": 404, "message": "记录不存在"}
+    conv.feedback = feedback_value
+    db.commit()
+    return {"code": 0, "message": "反馈已提交"}

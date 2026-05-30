@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>校园 AI 助手</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- marked.js：Markdown 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* ===== 对话页布局 ===== */
+    .chat-layout {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ---------- 侧边栏 ---------- */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .sidebar-header .logo span { font-size: 24px; }
+
+    .new-chat-btn {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--primary);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .new-chat-btn:hover {
+      background: var(--primary-bg);
+      border-color: var(--primary);
+    }
+
+    /* 对话历史列表 */
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .chat-list-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chat-list-item .item-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chat-list-item .item-del {
+      flex-shrink: 0;
+      opacity: 0;
+      font-size: 14px;
+      color: var(--text-light);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: all var(--transition);
+    }
+    .chat-list-item:hover { background: var(--bg-hover); }
+    .chat-list-item:hover .item-del { opacity: 1; }
+    .chat-list-item .item-del:hover { color: #dc2626; background: #fee2e2; }
+    .chat-list-item.active {
+      background: var(--primary-bg);
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .user-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* ---------- 主聊天区 ---------- */
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: var(--bg);
+    }
+
+    /* 顶部快捷问题 */
+    .quick-questions {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .quick-q {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      background: var(--bg);
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .quick-q:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-bg);
+    }
+
+    /* 消息滚动区 */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+    }
+
+    /* 欢迎页（无对话时显示） */
+    .welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 40px;
+    }
+    .welcome-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    .welcome h2 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .welcome p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      max-width: 400px;
+    }
+
+    /* ---------- 单条消息 ---------- */
+    .message {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .msg-avatar.user { background: var(--primary); }
+    .msg-avatar.ai   { background: #7c3aed; }
+
+    .msg-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .msg-role {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .msg-bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+    .msg-bubble.user {
+      background: var(--bubble-user);
+      color: var(--bubble-user-text);
+    }
+    .msg-bubble.ai {
+      background: var(--bubble-ai);
+      color: var(--bubble-ai-text);
+      border: 1px solid var(--border);
+    }
+
+    /* Markdown 内容样式 */
+    .msg-bubble.ai h1, .msg-bubble.ai h2, .msg-bubble.ai h3 { margin: 12px 0 6px; }
+    .msg-bubble.ai ul, .msg-bubble.ai ol { padding-left: 20px; margin: 6px 0; }
+    .msg-bubble.ai li { margin-bottom: 4px; }
+    .msg-bubble.ai code {
+      background: var(--bg-hover);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .msg-bubble.ai pre {
+      background: var(--bg-secondary);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      margin: 8px 0;
+    }
+    .msg-bubble.ai pre code { background: none; padding: 0; }
+    .msg-bubble.ai blockquote {
+      border-left: 3px solid var(--primary);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: var(--text-secondary);
+    }
+
+    /* 引用来源 */
+    .msg-sources {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-light);
+    }
+    .msg-sources summary {
+      cursor: pointer;
+      color: var(--primary);
+      font-weight: 500;
+    }
+    .source-item {
+      padding: 6px 10px;
+      margin-top: 4px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--primary);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* 消息操作按钮 */
+    .msg-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .msg-action {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      color: var(--text-light);
+      transition: all var(--transition);
+    }
+    .msg-action:hover { color: var(--text); background: var(--bg-hover); }
+    .msg-action.active { color: var(--primary); }
+
+    /* ---------- 输入区 ---------- */
+    .chat-input-area {
+      padding: 12px 16px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .input-row textarea {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 150px;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg-chat);
+      outline: none;
+      transition: border var(--transition);
+      line-height: 1.5;
+    }
+    .input-row textarea:focus {
+      border-color: var(--primary);
+    }
+    .send-btn {
+      width: 44px; height: 44px;
+      border: none;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .send-btn:hover { background: var(--primary-dark); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text-light);
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    /* ---------- 移动端：侧边栏菜单按钮 ---------- */
+    .menu-btn {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text);
+      padding: 4px 8px;
+    }
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 9;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        z-index: 10;
+        transform: translateX(-100%);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.show { display: block; }
+      .menu-btn { display: block; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="chat-layout">
+
+  <!-- ==================== 侧边栏 ==================== -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo"><span>🤖</span>校园 AI 助手</div>
+      <button class="new-chat-btn" onclick="newChat()">＋ 新建对话</button>
+    </div>
+
+    <!-- 对话历史列表 -->
+    <div class="chat-list" id="chatList">
+      <!-- 动态生成 -->
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="sidebarAvatar">U</div>
+        <span id="sidebarName">未登录</span>
+      </div>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="切换主题">🌙</button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()" title="退出">🚪</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==================== 主聊天区 ==================== -->
+  <main class="chat-main">
+
+    <!-- 移动端菜单按钮 -->
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
+      <button class="menu-btn" onclick="openSidebar()">☰</button>
+      <span style="font-weight:600;font-size:15px;">校园 AI 助手</span>
+    </div>
+
+    <!-- 快捷问题 -->
+    <div class="quick-questions" id="quickQuestions">
+      <button class="quick-q" onclick="sendQuick('奖学金怎么申请？')">💰 奖学金怎么申请？</button>
+      <button class="quick-q" onclick="sendQuick('补考是什么流程？')">📝 补考是什么流程？</button>
+      <button class="quick-q" onclick="sendQuick('宿舍几点熄灯？')">🏠 宿舍几点熄灯？</button>
+      <button class="quick-q" onclick="sendQuick('军训可以请假吗？')">🎖️ 军训可以请假吗？</button>
+      <button class="quick-q" onclick="sendQuick('如何申请换宿舍？')">🔄 如何申请换宿舍？</button>
+      <button class="quick-q" onclick="sendQuick('社团活动怎么申请？')">🎭 社团活动怎么申请？</button>
+    </div>
+
+    <!-- 消息区 -->
+    <div class="chat-messages" id="chatMessages">
+      <!-- 欢迎页 -->
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">🎓</div>
+        <h2>你好！我是校园 AI 助手</h2>
+        <p>我可以帮你解答选课、奖助学金、宿舍规定、军训安排等校园相关问题。点击上方快捷问题或直接输入开始提问吧！</p>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="chat-input-area">
+      <div class="input-row">
+        <textarea id="userInput" rows="1"
+                  placeholder="输入你的校园问题..."
+                  onkeydown="handleKeyDown(event)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">➤</button>
+      </div>
+      <div class="input-hint">AI 回答仅供参考，重要信息请以学校官方通知为准</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== 脚本 ===== -->
+<script src="js/api.js"></script>
+<script src="js/chat.js"></script>
+</body>
+</html>

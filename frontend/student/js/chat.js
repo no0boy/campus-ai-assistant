@@ -1,0 +1,478 @@
+/**
+ * AI 对话页核心逻辑
+ * 管理：消息收发、流式渲染、多轮对话、Markdown 渲染、引用溯源、反馈
+ */
+
+// ========== 全局状态 ==========
+let currentConversationId = null     // 当前对话 ID（null = 新对话）
+let conversations = []               // 对话历史列表 [{id, title, messages:[]}]
+let isWaiting = false                // 是否正在等待 AI 回复
+let currentAbortController = null    // 当前请求的中断控制器
+
+// ========== 页面初始化 ==========
+document.addEventListener('DOMContentLoaded', () => {
+  checkAuth()
+  initTheme()
+  loadUserInfo()
+  loadConversations()
+  autoResizeTextarea()
+})
+
+/** 登录态检查 — 演示模式，无 token 时自动创建 */
+function checkAuth() {
+  if (!localStorage.getItem('token')) {
+    // 演示模式：自动创建临时账号，方便查看页面效果
+    localStorage.setItem('token', 'demo_token')
+    localStorage.setItem('user', JSON.stringify({ username: '演示用户', role: '学生' }))
+  }
+}
+
+// ========== 主题管理 ==========
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light'
+  document.documentElement.setAttribute('data-theme', saved)
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme')
+  const next = current === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', next)
+  localStorage.setItem('theme', next)
+}
+
+// ========== 用户信息 ==========
+function loadUserInfo() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    document.getElementById('sidebarName').textContent = user.username || '用户'
+    document.getElementById('sidebarAvatar').textContent = (user.username || 'U')[0].toUpperCase()
+  } catch (e) { /* 忽略 */ }
+}
+
+// ========== 侧边栏 ==========
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open')
+  document.getElementById('sidebarOverlay').classList.add('show')
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open')
+  document.getElementById('sidebarOverlay').classList.remove('show')
+}
+
+// ========== 对话管理 ==========
+
+/** 加载本地对话历史（当前用 localStorage，后面改调 API） */
+function loadConversations() {
+  try {
+    conversations = JSON.parse(localStorage.getItem('conversations') || '[]')
+  } catch (e) {
+    conversations = []
+  }
+  renderChatList()
+}
+
+/** 保存对话到 localStorage */
+function saveConversations() {
+  localStorage.setItem('conversations', JSON.stringify(conversations))
+}
+
+/** 渲染左侧对话列表 */
+function renderChatList() {
+  const el = document.getElementById('chatList')
+  if (conversations.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:13px;">暂无历史对话</div>'
+    return
+  }
+  el.innerHTML = conversations.map(c => `
+    <div class="chat-list-item ${c.id === currentConversationId ? 'active' : ''}"
+         onclick="switchConversation('${c.id}')">
+      <span class="item-text">${escapeHtml(c.title || '新对话')}</span>
+      <button class="item-del" onclick="deleteConversation(event, '${c.id}')">✕</button>
+    </div>
+  `).join('')
+}
+
+/** 删除对话 */
+function deleteConversation(event, convId) {
+  event.stopPropagation()  // 防止触发 switchConversation
+  if (!confirm('确定删除这条对话吗？')) return
+
+  conversations = conversations.filter(c => c.id !== convId)
+  saveConversations()
+
+  // 如果删除的是当前对话，回到欢迎页
+  if (currentConversationId === convId) {
+    newChat()
+  }
+  renderChatList()
+}
+
+/** 停止生成 */
+function stopGeneration() {
+  if (currentAbortController) {
+    currentAbortController.abort()
+  }
+}
+
+/** 切换停止按钮显示 */
+function toggleStopBtn(show) {
+  const sendBtn = document.getElementById('sendBtn')
+  if (show) {
+    sendBtn.textContent = '■'
+    sendBtn.onclick = stopGeneration
+    sendBtn.style.background = '#ef4444'
+  } else {
+    sendBtn.textContent = '➤'
+    sendBtn.onclick = sendMessage
+    sendBtn.style.background = ''
+    sendBtn.disabled = false
+  }
+}
+
+/** 新建对话 */
+function newChat() {
+  currentConversationId = null
+  const messagesEl = document.getElementById('chatMessages')
+  messagesEl.innerHTML = `
+    <div class="welcome" id="welcomeScreen">
+      <div class="welcome-icon">🎓</div>
+      <h2>你好！我是校园 AI 助手</h2>
+      <p>我可以帮你解答选课、奖助学金、宿舍规定、军训安排等校园相关问题。点击上方快捷问题或直接输入开始提问吧！</p>
+    </div>
+  `
+  renderChatList()
+  closeSidebar()
+}
+
+/** 切换到某条对话 */
+function switchConversation(id) {
+  currentConversationId = id
+  const conv = conversations.find(c => c.id === id)
+  if (!conv) return
+
+  const messagesEl = document.getElementById('chatMessages')
+  messagesEl.innerHTML = ''
+
+  conv.messages.forEach(msg => {
+    appendMessage(msg.role, msg.content, msg.sources, false)
+  })
+
+  renderChatList()
+  scrollToBottom()
+  closeSidebar()
+}
+
+// ========== 发送消息 ==========
+
+/** 发送快捷问题 */
+function sendQuick(question) {
+  document.getElementById('userInput').value = question
+  sendMessage()
+}
+
+/** 键盘事件：Enter 发送，Shift+Enter 换行 */
+function handleKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+  }
+}
+
+/** 发送消息主逻辑 */
+async function sendMessage() {
+  const input = document.getElementById('userInput')
+  const question = input.value.trim()
+  if (!question || isWaiting) return
+
+  // 清空输入框
+  input.value = ''
+  input.style.height = 'auto'
+
+  // 隐藏欢迎页
+  const welcome = document.getElementById('welcomeScreen')
+  if (welcome) welcome.remove()
+
+  // 显示用户消息
+  appendMessage('user', question)
+  scrollToBottom()
+
+  // 显示加载状态：正在检索
+  const aiMsg = appendMessage('ai', '', [], true)
+  updateAIStatus(aiMsg, '检索知识库中')
+
+  isWaiting = true
+  currentAbortController = new AbortController()
+  toggleStopBtn(true)  // 显示停止按钮
+
+  try {
+    // 调用流式 API，传入 abort signal
+    let fullAnswer = ''
+    let sources = []
+    let searchMethod = '语义向量'
+    let llmAvailable = true
+
+    const res = await apiChatAsk(question, currentConversationId, true, (chunk, answer) => {
+      fullAnswer = answer
+      updateAIMessage(aiMsg, fullAnswer, false)
+      scrollToBottom()
+    }, currentAbortController.signal)
+
+    if (res && res.code === 0) {
+      const d = res.data || res
+      sources = d.sources || []
+      searchMethod = d.search_method || '语义向量'
+      llmAvailable = d.llm_available !== false
+
+      const sourceCount = sources.length
+      let statusLine = sourceCount > 0
+        ? sourceCount + '条相关内容（' + searchMethod + '检索）' + (llmAvailable ? '  AI已生成回答' : '  已返回原始内容')
+        : '知识库无匹配内容，AI直接回答'
+      if (res.aborted) {
+        statusLine += ' [已停止]'
+        fullAnswer = (fullAnswer || d.answer || '') + '\n\n*[已停止生成]*'
+      }
+      updateAIStatus(aiMsg, statusLine)
+
+      // 最终渲染 Markdown
+      updateAIMessage(aiMsg, fullAnswer || d.answer, true)
+
+      // 只有非空回答才展示来源和操作按钮
+      const hasContent = (fullAnswer || d.answer) && (fullAnswer || d.answer).trim().length > 0
+      if (hasContent && sourceCount > 0) addSources(aiMsg, sources)
+      if (hasContent) addMessageActions(aiMsg)
+
+      if (hasContent) {
+        saveMessage(question, fullAnswer || d.answer, sources)
+        if (!currentConversationId) {
+          currentConversationId = 'conv_' + Date.now()
+          const title = question.length > 20 ? question.slice(0, 20) + '...' : question
+          conversations.unshift({ id: currentConversationId, title: title, messages: [] })
+        }
+        updateCurrentConv(question, fullAnswer || d.answer, sources)
+        renderChatList()
+      }
+    } else if (!(res && res.aborted)) {
+      updateAIMessage(aiMsg, '抱歉，出了点问题：' + ((res && res.message) || '未知错误'), true)
+    }
+  } catch (err) {
+    updateAIMessage(aiMsg, '抱歉，网络连接失败，请检查后端服务是否已启动。', true)
+  } finally {
+    isWaiting = false
+    currentAbortController = null
+    toggleStopBtn(false)
+    document.getElementById('sendBtn').disabled = false
+    document.getElementById('userInput').focus()
+  }
+}
+
+// ========== 消息渲染 ==========
+
+/**
+ * 添加一条消息到聊天区
+ * @param {string}  role      - 'user' | 'ai'
+ * @param {string}  content   - 消息内容
+ * @param {array}   sources   - 引用来源（仅 AI 消息）
+ * @param {boolean} isLoading - 是否显示加载动画
+ * @returns {HTMLElement}      - 消息 DOM 元素
+ */
+function appendMessage(role, content, sources = [], isLoading = false) {
+  const messagesEl = document.getElementById('chatMessages')
+
+  const msgDiv = document.createElement('div')
+  msgDiv.className = 'message'
+  msgDiv.setAttribute('data-role', role)
+
+  const avatarEmoji = role === 'user' ? '👤' : '🤖'
+  const avatarClass = role === 'user' ? 'user' : 'ai'
+  const roleLabel = role === 'user' ? '你' : '校园 AI 助手'
+
+  msgDiv.innerHTML = `
+    <div class="msg-avatar ${avatarClass}">${avatarEmoji}</div>
+    <div class="msg-content">
+      <div class="msg-role">${roleLabel}</div>
+      <div class="msg-bubble ${role}">
+        ${isLoading
+          ? '<div class="typing-dot"><span></span><span></span><span></span></div>'
+          : renderContent(content, role)
+        }
+      </div>
+      <div class="msg-sources" style="display:none;"></div>
+      <div class="msg-actions" style="display:none;"></div>
+    </div>
+  `
+
+  messagesEl.appendChild(msgDiv)
+  return msgDiv
+}
+
+/**
+ * 更新 AI 消息内容（流式打字效果）
+ * @param {HTMLElement} msgDiv  - 消息 DOM
+ * @param {string}      content - 新内容
+ * @param {boolean}     final   - 是否为最终结果（true 则渲染 Markdown）
+ */
+function updateAIMessage(msgDiv, content, final = false) {
+  const bubble = msgDiv.querySelector('.msg-bubble.ai')
+  if (final) {
+    bubble.innerHTML = renderContent(content, 'ai')
+  } else {
+    // 流式输出时，纯文本显示，不做 Markdown 渲染
+    bubble.textContent = content
+  }
+}
+
+/** 渲染消息内容（用户纯文本，AI 用 Markdown） */
+function renderContent(content, role) {
+  if (role === 'user') {
+    return escapeHtml(content)
+  }
+  // AI 消息：Markdown 渲染
+  try {
+    return marked.parse(content)
+  } catch (e) {
+    return escapeHtml(content)
+  }
+}
+
+/** 更新 AI 消息的状态文字（如"检索中..."） */
+function updateAIStatus(msgDiv, statusText) {
+  let statusEl = msgDiv.querySelector('.msg-status')
+  if (!statusEl) {
+    statusEl = document.createElement('div')
+    statusEl.className = 'msg-status'
+    const contentEl = msgDiv.querySelector('.msg-content')
+    contentEl.insertBefore(statusEl, contentEl.firstChild)
+  }
+  statusEl.textContent = statusText
+  statusEl.style.cssText = 'font-size:11px;color:var(--text-light);margin-bottom:4px;'
+}
+
+/** 添加引用来源（默认展开 + 每条来源可查看） */
+function addSources(msgDiv, sources) {
+  const sourcesEl = msgDiv.querySelector('.msg-sources')
+  if (!sources || sources.length === 0) return
+
+  sourcesEl.style.display = 'block'
+  sourcesEl.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">
+      📎 参考来源（${sources.length} 条）
+    </div>
+    ${sources.map((s, i) => `
+      <div class="source-item" style="margin-bottom:6px;">
+        <div style="font-weight:500;color:var(--primary);font-size:12px;">
+          [${i + 1}] 《${escapeHtml(s.title || '未知文档')}》
+          <span style="color:var(--text-light);font-weight:400;">匹配度 ${Math.round((s.score || 0) * 100)}%</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;line-height:1.5;">
+          ${escapeHtml((s.content || '').slice(0, 300))}${(s.content || '').length > 300 ? '...' : ''}
+        </div>
+      </div>
+    `).join('')}
+  `
+}
+
+/** 添加消息操作按钮（复制 + 赞/踩） */
+function addMessageActions(msgDiv) {
+  const actionsEl = msgDiv.querySelector('.msg-actions')
+  actionsEl.style.display = 'flex'
+
+  const msgId = 'msg_' + Date.now()
+  msgDiv.setAttribute('data-msg-id', msgId)
+
+  actionsEl.innerHTML = `
+    <button class="msg-action" onclick="copyMessage(this)" title="复制回答">📋</button>
+    <button class="msg-action" onclick="feedbackMessage(this, 1)" title="有用">👍</button>
+    <button class="msg-action" onclick="feedbackMessage(this, -1)" title="没用">👎</button>
+  `
+}
+
+// ========== 消息操作 ==========
+
+/** 复制 AI 回答 */
+function copyMessage(btn) {
+  const msgDiv = btn.closest('.message')
+  const bubble = msgDiv.querySelector('.msg-bubble.ai')
+  const text = bubble.textContent
+
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅'
+    setTimeout(() => { btn.textContent = '📋' }, 1500)
+  }).catch(() => {
+    // 降级方案
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    btn.textContent = '✅'
+    setTimeout(() => { btn.textContent = '📋' }, 1500)
+  })
+}
+
+/** 提交反馈（赞/踩） */
+function feedbackMessage(btn, value) {
+  const msgDiv = btn.closest('.message')
+  const msgId = msgDiv.getAttribute('data-msg-id')
+
+  // 清除同组其他按钮状态
+  const actions = msgDiv.querySelectorAll('.msg-action')
+  actions.forEach(a => a.classList.remove('active'))
+  btn.classList.add('active')
+
+  // 调用反馈 API（目前后端还没好，先存本地）
+  console.log('反馈:', { msgId, value })
+  // apiFeedback(currentConversationId, msgId, value)
+}
+
+// ========== 对话持久化 ==========
+
+/** 保存消息到当前对话 */
+function saveMessage(question, answer, sources) {
+  // 当前由 localStorage 管理，后端好了之后改调 API
+}
+
+/** 更新当前对话的消息列表 */
+function updateCurrentConv(question, answer, sources) {
+  let conv = conversations.find(c => c.id === currentConversationId)
+  if (!conv) {
+    conv = { id: currentConversationId, title: '', messages: [] }
+    conversations.unshift(conv)
+  }
+  conv.messages.push({ role: 'user', content: question })
+  conv.messages.push({ role: 'ai', content: answer, sources })
+  saveConversations()
+}
+
+// ========== 工具函数 ==========
+
+/** 滚动到聊天底部 */
+function scrollToBottom() {
+  const el = document.getElementById('chatMessages')
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight
+  })
+}
+
+/** HTML 转义 */
+function escapeHtml(str) {
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
+}
+
+/** textarea 自动增高 */
+function autoResizeTextarea() {
+  const ta = document.getElementById('userInput')
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto'
+    ta.style.height = Math.min(ta.scrollHeight, 150) + 'px'
+  })
+}
+
+// ========== 退出登录 ==========
+function logout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('conversations')
+  window.location.href = 'login.html'
+}

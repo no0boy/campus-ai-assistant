@@ -1,0 +1,204 @@
+/* ============================================
+   校园AI助手 — 全局样式
+   支持亮色/暗色主题切换，移动端适配
+   ============================================ */
+
+/* ========== CSS 变量（主题色） ========== */
+:root {
+  /* 主色调 — 校园蓝 */
+  --primary: #2563eb;
+  --primary-light: #3b82f6;
+  --primary-dark: #1d4ed8;
+  --primary-bg: #eff6ff;
+
+  /* 背景 */
+  --bg: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-hover: #f1f5f9;
+  --bg-chat: #f8fafc;
+
+  /* 文字 */
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --text-light: #94a3b8;
+
+  /* 边框 */
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.1);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* 用户消息气泡 */
+  --bubble-user: #2563eb;
+  --bubble-user-text: #ffffff;
+  /* AI 消息气泡 */
+  --bubble-ai: #ffffff;
+  --bubble-ai-text: #1e293b;
+
+  /* 侧边栏宽度 */
+  --sidebar-width: 280px;
+
+  /* 过渡 */
+  --transition: 0.2s ease;
+}
+
+/* ========== 暗色主题 ========== */
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-hover: #334155;
+  --bg-chat: #1e293b;
+
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-light: #64748b;
+
+  --border: #334155;
+  --border-light: #1e293b;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
+
+  --bubble-ai: #1e293b;
+  --bubble-ai-text: #f1f5f9;
+
+  --primary-bg: #1e3a5f;
+}
+
+/* ========== 基础重置 ========== */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+               'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--transition), color var(--transition);
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ========== 按钮 ========== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--primary-dark); }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { background: var(--bg-hover); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-lg { padding: 12px 28px; font-size: 16px; }
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== 输入框 ========== */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  transition: border var(--transition);
+  outline: none;
+}
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+}
+.input::placeholder {
+  color: var(--text-light);
+}
+
+/* ========== 通用布局 ========== */
+.page-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ========== 加载动画 ========== */
+.typing-dot {
+  display: inline-flex;
+  gap: 4px;
+  padding: 8px 0;
+}
+.typing-dot span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-light);
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+.typing-dot span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dot span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* ========== 滚动条美化 ========== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
+
+/* ========== 响应式 ========== */
+@media (max-width: 768px) {
+  :root { --sidebar-width: 0px; }
+  .btn { padding: 8px 16px; font-size: 13px; }
+}
