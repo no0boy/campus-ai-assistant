@@ -6,6 +6,18 @@
 
 ---
 
+## 📸 效果展示
+
+| AI 对话（流式输出 + 答案溯源） | 管理员后台 |
+|:---:|:---:|
+| ![](screenshots/chat.png) | ![](screenshots/admin.png) |
+
+| 登录页 | 数据看板 |
+|:---:|:---:|
+| ![](screenshots/login.png) | ![](screenshots/dashboard.png) |
+
+---
+
 ## 🏗 系统架构
 
 ```mermaid

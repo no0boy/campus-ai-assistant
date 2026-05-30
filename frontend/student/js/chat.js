@@ -18,12 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
   autoResizeTextarea()
 })
 
-/** 登录态检查 — 演示模式，无 token 时自动创建 */
+/** 登录态检查 — 无 token 时自动登录为演示学生 */
 function checkAuth() {
   if (!localStorage.getItem('token')) {
-    // 演示模式：自动创建临时账号，方便查看页面效果
+    // 自动登录为演示账号（本地预览用，线上部署需真实登录）
     localStorage.setItem('token', 'demo_token')
-    localStorage.setItem('user', JSON.stringify({ username: '演示用户', role: '学生' }))
+    localStorage.setItem('user', JSON.stringify({ username: 'student', role: '学生' }))
+    location.reload()
   }
 }
 
