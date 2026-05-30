@@ -16,4 +16,4 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 # 启动（API Key 通过环境变量注入）
-CMD uvicorn main:app --host 0.0.0.0 --port 8000
+CMD uvicorn main:app --host 0.0.0.0 --port 7860

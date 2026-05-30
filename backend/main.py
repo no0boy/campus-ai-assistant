@@ -37,11 +37,17 @@ app.include_router(documents.router)
 app.include_router(stats.router)
 app.include_router(settings.router)
 
-
-# ========== 静态文件（前端） ==========
+# ========== 前端静态文件（部署用） ==========
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(FRONTEND_DIR):
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    app.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+
+@app.get("/")
+def root():
+    if os.path.exists(FRONTEND_DIR):
+        return RedirectResponse(url="/app/student/login.html")
+    return {"name": "campus-ai-assistant", "docs": "/docs"}
 
 
 @app.get("/health")

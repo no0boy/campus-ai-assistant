@@ -4,8 +4,9 @@
  * 后端地址：http://127.0.0.1:8000
  */
 
-// 部署后前后端同源，用相对路径；本地开发可改为 http://127.0.0.1:8001
-const BASE_URL = ''
+// 部署时自动同源，本地开发指向 localhost
+const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+const BASE_URL = isLocal ? 'http://127.0.0.1:8001' : ''
 
 /**
  * 通用请求函数
