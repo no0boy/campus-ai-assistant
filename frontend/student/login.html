@@ -186,13 +186,18 @@
         <button type="submit" class="btn btn-primary login-btn" id="submitBtn">
           登 录
         </button>
+
+        <button type="button" class="btn btn-outline login-btn" style="margin-top:8px;"
+                onclick="quickLogin('student','123456')">
+          ⚡ 一键体验（学生）
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm login-btn" style="margin-top:4px;"
+                onclick="quickLogin('admin','admin123')">
+          管理员入口
+        </button>
       </form>
 
       <div class="login-footer">
-        <div style="background:var(--bg-secondary);padding:10px;border-radius:8px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-          <strong>演示账号</strong><br>
-          学生：student / 123456 &nbsp;|&nbsp; 管理员：admin / admin123
-        </div>
         还没有账号？<a href="register.html">立即注册</a>
       </div>
     </div>
@@ -266,6 +271,13 @@
         submitBtn.textContent = '登 录'
       }
     })
+
+    // 一键快速登录
+    async function quickLogin(username, password) {
+      document.getElementById('username').value = username
+      document.getElementById('password').value = password
+      form.dispatchEvent(new Event('submit'))
+    }
 
     function showError(msg) {
       errorMsg.textContent = msg
