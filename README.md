@@ -4,6 +4,8 @@
 
 **核心价值**：解决通用大模型"不懂你们学校"的问题 — 私有知识库 + RAG = 准确、可溯源的回答。
 
+> 🚀 **在线体验**：[https://no0boy2026-campus-ai-assistant.hf.space](https://no0boy2026-campus-ai-assistant.hf.space)
+
 ---
 
 ## 📸 效果展示
