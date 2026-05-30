@@ -1,11 +1,14 @@
 """
-校园 AI 助手 — FastAPI 主入口
-启动命令: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+校园 AI 助手 — FastAPI 主入口（一体部署版：API + 前端）
+启动命令: uvicorn main:app --host 0.0.0.0 --port 8000
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 import uvicorn
+import os
 
 from database import init_db
 from routes import auth, chat, documents, stats, settings
@@ -18,7 +21,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ========== 配置 CORS 跨域 ==========
+# ========== CORS ==========
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
@@ -27,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ========== 注册路由 ==========
+# ========== API 路由 ==========
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(documents.router)
@@ -35,37 +38,26 @@ app.include_router(stats.router)
 app.include_router(settings.router)
 
 
-# ========== 启动事件 ==========
-@app.on_event("startup")
-def startup():
-    """应用启动时初始化数据库"""
-    print("[INFO] 校园 AI 助手启动中...")
-    init_db()
-    print("[OK] 数据库初始化完成")
-    print(f"[INFO] API 文档: http://127.0.0.1:8000/docs")
-    print(f"[INFO] 健康检查: http://127.0.0.1:8000/health")
+# ========== 静态文件（前端） ==========
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+if os.path.exists(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
 @app.get("/health")
 def health_check():
-    """健康检查接口"""
-    return {"status": "ok", "message": "校园 AI 助手服务运行中"}
+    return {"status": "ok"}
 
 
-@app.get("/")
-def root():
-    return {
-        "name": "校园 AI 助手",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
+# ========== 启动 ==========
+@app.on_event("startup")
+def startup():
+    print("[INFO] 启动中...")
+    init_db()
+    print("[OK] 数据库就绪")
+    print(f"[INFO] 前端: http://0.0.0.0:8000/app/student/login.html")
+    print(f"[INFO] API文档: http://0.0.0.0:8000/docs")
 
 
-# ========== 启动入口 ==========
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
