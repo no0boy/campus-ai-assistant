@@ -52,8 +52,34 @@ def _embed_text(text: str) -> list[float]:
 
 
 def _embed_batch(texts: list[str]) -> list[list[float]]:
-    """批量向量化"""
-    return [_embed_text(t) for t in texts]
+    """
+    批量向量化 — DashScope 原生支持多文本一次调用
+    将 N 次 API 调用合并为 ceil(N/25) 次，大幅提速
+    """
+    if not texts:
+        return []
+
+    dashscope.api_key = config.DASHSCOPE_API_KEY
+    all_vectors = []
+
+    # DashScope Embedding 每批最多 25 条
+    batch_size = 25
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        resp = dashscope.TextEmbedding.call(
+            model=config.EMBEDDING_MODEL,
+            input=batch  # 传入列表，一次调一批
+        )
+        if resp.status_code == HTTPStatus.OK:
+            batch_vectors = [e["embedding"] for e in resp.output["embeddings"]]
+            all_vectors.extend(batch_vectors)
+        else:
+            # 批量失败则降级为逐条
+            print(f"[WARN] 批量向量化失败: {resp.code}，降级逐条处理")
+            for t in batch:
+                all_vectors.append(_embed_text(t))
+
+    return all_vectors
 
 
 def _init_llm(model_name: str = None, api_key: str = None, api_base: str = None,
@@ -242,24 +268,40 @@ def process_document(file_path: str, file_type: str, doc_title: str) -> int:
     # 3. 生成唯一 ID（用于后续删除）
     doc_prefix = doc_title.replace(" ", "_").replace(".", "_")
 
-    # 4. 逐片向量化并存入 ChromaDB
-    for i, chunk in enumerate(chunks):
-        try:
-            # 使用 DashScope 原生接口进行向量化
-            vector = _embed_text(chunk)
-
+    # 4. 批量向量化（每批 25 条，大幅减少 API 调用次数）
+    if len(chunks) <= 25:
+        # 一次批量调用
+        vectors = _embed_batch(chunks)
+        for i, vector in enumerate(vectors):
             collection.add(
                 ids=[f"{doc_prefix}_chunk_{i}"],
                 embeddings=[vector],
-                documents=[chunk],
+                documents=[chunks[i]],
                 metadatas=[{
                     "doc_title": doc_title,
                     "chunk_index": i,
                     "total_chunks": len(chunks)
                 }]
             )
-        except Exception as e:
-            print(f"向量化失败 chunk {i}: {e}")
+    else:
+        # 分批处理
+        batch_size = 25
+        for batch_start in range(0, len(chunks), batch_size):
+            batch_end = min(batch_start + batch_size, len(chunks))
+            batch = chunks[batch_start:batch_end]
+            vectors = _embed_batch(batch)
+            for j, vector in enumerate(vectors):
+                i = batch_start + j
+                collection.add(
+                    ids=[f"{doc_prefix}_chunk_{i}"],
+                    embeddings=[vector],
+                    documents=[chunks[i]],
+                    metadatas=[{
+                        "doc_title": doc_title,
+                        "chunk_index": i,
+                        "total_chunks": len(chunks)
+                    }]
+                )
 
     return len(chunks)
 
