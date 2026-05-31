@@ -69,18 +69,33 @@ def startup():
     if os.path.exists(seeds_dir):
         try:
             from services.rag_service import process_document, collection
+            from database import SessionLocal, Document
             existing = collection.count()
             if existing == 0:
                 print("[INFO] 知识库为空，自动导入种子文档...")
                 import_count = 0
+                db2 = SessionLocal()
                 for f in os.listdir(seeds_dir):
                     fp = os.path.join(seeds_dir, f)
+                    chunk_count = 0
                     if f.endswith(".txt"):
-                        process_document(fp, "txt", f)
-                        import_count += 1
+                        chunk_count = process_document(fp, "txt", f)
                     elif f.endswith(".pdf"):
-                        process_document(fp, "pdf", f)
-                        import_count += 1
+                        chunk_count = process_document(fp, "pdf", f)
+                    else:
+                        continue
+                    # 同步写入 SQLite 文档表
+                    doc = Document(
+                        title=f,
+                        file_path=fp,
+                        file_type="txt" if f.endswith(".txt") else "pdf",
+                        chunk_count=chunk_count,
+                        uploader_id=1  # admin
+                    )
+                    db2.add(doc)
+                    db2.commit()
+                    import_count += 1
+                db2.close()
                 print(f"[OK] 已导入 {import_count} 篇种子文档")
             else:
                 print(f"[INFO] 知识库已有 {existing} 条向量，跳过导入")
