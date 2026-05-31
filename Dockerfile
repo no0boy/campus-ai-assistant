@@ -12,8 +12,11 @@ COPY frontend/ ./frontend/
 
 WORKDIR /app/backend
 
-# 暴露端口
-EXPOSE 8000
+# 从模板生成 config.py（API Key 通过环境变量注入）
+RUN cp config.example.py config.py
 
-# 启动（API Key 通过环境变量注入）
+# 暴露端口
+EXPOSE 7860
+
+# 启动
 CMD uvicorn main:app --host 0.0.0.0 --port 7860
