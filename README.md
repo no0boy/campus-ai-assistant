@@ -1,3 +1,13 @@
+---
+title: 校园智能 AI 助手
+emoji: 🎓
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🎓 校园智能 AI 助手 — 基于 RAG 的知识库问答系统
 
 面向大学校园的 AI 智能问答应用。上传校园文档构建私有知识库，学生用自然语言提问，系统检索相关知识 + 大模型生成精准回答。
