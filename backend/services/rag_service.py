@@ -58,18 +58,30 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 
 def _init_llm(model_name: str = None, api_key: str = None, api_base: str = None,
               temperature: float = None, max_tokens: int = None):
-    """初始化大模型"""
+    """初始化大模型，无 API Key 时安全降级（不崩溃）"""
     global llm, current_llm_model, current_api_key, current_api_base
     current_llm_model = model_name or config.LLM_MODEL
     current_api_key = api_key or config.DASHSCOPE_API_KEY
     current_api_base = api_base or config.LLM_BASE_URL
-    llm = ChatOpenAI(
-        model=current_llm_model,
-        api_key=current_api_key,
-        base_url=current_api_base,
-        temperature=temperature if temperature is not None else config.LLM_TEMPERATURE,
-        max_tokens=max_tokens or config.LLM_MAX_TOKENS
-    )
+
+    # 无有效 API Key 时安全降级
+    if not current_api_key or len(current_api_key) < 4:
+        llm = None
+        print("[WARN] 未配置 API Key，AI 生成不可用，检索功能正常")
+        return
+
+    try:
+        llm = ChatOpenAI(
+            model=current_llm_model,
+            api_key=current_api_key,
+            base_url=current_api_base,
+            temperature=temperature if temperature is not None else config.LLM_TEMPERATURE,
+            max_tokens=max_tokens or config.LLM_MAX_TOKENS
+        )
+        print(f"[OK] LLM 已初始化: {current_llm_model}")
+    except Exception as e:
+        llm = None
+        print(f"[WARN] LLM 初始化失败: {e}，检索功能正常")
 
 
 def reload_llm(settings: dict):
