@@ -12,6 +12,7 @@ import os
 
 from database import init_db
 from routes import auth, chat, documents, stats, settings
+from routes import usage
 import config
 
 # ========== 创建 FastAPI 应用 ==========
@@ -36,6 +37,7 @@ app.include_router(chat.router)
 app.include_router(documents.router)
 app.include_router(stats.router)
 app.include_router(settings.router)
+app.include_router(usage.router)
 
 # ========== 前端静态文件（部署用） ==========
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -61,6 +63,15 @@ def startup():
     print("[INFO] 启动中...")
     init_db()
     print("[OK] 数据库就绪")
+
+    # 构建 BM25 索引（异步不阻塞启动）
+    try:
+        from services.hybrid_search import build_index
+        bm25_count = build_index()
+        print(f"[OK] BM25 索引就绪 ({bm25_count} 条)")
+    except Exception as e:
+        print(f"[WARN] BM25 索引跳过: {e}")
+
     print(f"[INFO] 前端: http://0.0.0.0:8000/app/student/login.html")
     print(f"[INFO] API文档: http://0.0.0.0:8000/docs")
 

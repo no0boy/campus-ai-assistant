@@ -4,9 +4,10 @@
  * 后端地址：http://127.0.0.1:8000
  */
 
-// 部署时自动同源，本地开发指向 localhost
+// 部署时自动同源，本地开发自动适配端口
 const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
-const BASE_URL = isLocal ? 'http://127.0.0.1:8001' : ''
+// 一体部署时前后端同端口，直接空 BASE_URL 即可
+const BASE_URL = ''
 
 /**
  * 通用请求函数

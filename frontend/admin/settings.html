@@ -150,7 +150,8 @@
           <div class="form-row">
             <div class="form-label"><span>模型版本</span><span class="hint">不同厂商模型名不同</span></div>
             <select id="modelName">
-              <option value="qwen-plus" selected>qwen-plus (性价比)</option>
+              <option value="qwen3.6-plus" selected>qwen3.6-plus (最新)</option>
+              <option value="qwen-plus">qwen-plus (性价比)</option>
               <option value="qwen-turbo">qwen-turbo (快速)</option>
               <option value="qwen-max">qwen-max (最强)</option>
               <option value="qwen-plus-latest">qwen-plus-latest</option>
@@ -266,6 +267,7 @@
   // ========== 模型选项联动 ==========
   const modelOptions = {
     qwen: [
+      { value: 'qwen3.6-plus', text: 'qwen3.6-plus (最新)' },
       { value: 'qwen-plus', text: 'qwen-plus (性价比)' },
       { value: 'qwen-turbo', text: 'qwen-turbo (快速)' },
       { value: 'qwen-max', text: 'qwen-max (最强)' },
@@ -329,7 +331,7 @@
     // 同步保存到后端（让模型立即生效）
     const msg = document.getElementById('saveMsg')
     try {
-      const res = await fetch('http://127.0.0.1:8001/api/settings/model', {
+      const res = await fetch('/api/settings/model', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -364,7 +366,7 @@
 
       document.getElementById('modelProvider').value = saved.modelProvider || 'qwen'
       updateModelOptions()
-      document.getElementById('modelName').value = saved.modelName || 'qwen-plus'
+      document.getElementById('modelName').value = saved.modelName || 'qwen3.6-plus'
       document.getElementById('apiKey').value = saved.apiKey || ''
       document.getElementById('apiBase').value = saved.apiBase || ''
       document.getElementById('temperature').value = saved.temperature || 0.7

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>连接诊断</title></head>
+<body>
+<h2>连接诊断</h2>
+<pre id="log"></pre>
+<script>
+const BASE_URL = '';
+const log = document.getElementById('log');
+
+function add(msg) { log.textContent += msg + '\n'; }
+
+async function test() {
+  add('1. 测试 API 连接...');
+  try {
+    const r = await fetch(BASE_URL + '/health');
+    add('   ' + r.status + ' ' + JSON.stringify(await r.json()));
+  } catch(e) {
+    add('   FAIL: ' + e.message);
+  }
+
+  add('2. 测试登录...');
+  try {
+    const r = await fetch(BASE_URL + '/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username:'admin', password:'admin123'})
+    });
+    const d = await r.json();
+    add('   ' + r.status + ' code=' + d.code + ' ' + d.message);
+  } catch(e) {
+    add('   FAIL: ' + e.message);
+  }
+
+  add('3. 测试静态文件...');
+  try {
+    const r = await fetch(BASE_URL + '/app/student/js/api.js');
+    add('   ' + r.status + ' ' + r.headers.get('content-type'));
+  } catch(e) {
+    add('   FAIL: ' + e.message);
+  }
+
+  add('DONE');
+}
+test();
+</script>
+</body>
+</html>

@@ -9,8 +9,9 @@ from typing import Optional
 import json
 
 from routes.auth import get_current_user
-from database import get_db, User, Conversation
+from database import get_db, User, Conversation, UsageLog
 from services.rag_service import ask, ask_stream
+from services.token_tracker import hash_question
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/chat", tags=["聊天"])
@@ -74,7 +75,29 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
                     db.add(conv)
                     db.commit()
 
-                    yield f"data: {json.dumps({'type':'done','conversation_id':conv.conversation_id,'sources':[{'title':s['title'],'content':s['content'][:300]} for s in sources],'search_method':search_method,'llm_available':llm_available}, ensure_ascii=False)}\n\n"
+                    # 写入 Token 消耗日志
+                    usage = chunk.get("usage", {})
+                    usage_log = UsageLog(
+                        user_id=user.id,
+                        username=user.username,
+                        question=req.question,
+                        question_hash=hash_question(req.question),
+                        model_name=usage.get("model_name", ""),
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0),
+                        total_tokens=usage.get("total_tokens", 0),
+                        cost=usage.get("cost", 0.0),
+                        response_time_ms=usage.get("response_time_ms", 0),
+                        search_method=search_method,
+                        source_count=chunk.get("source_count", len(sources)),
+                        cached=1 if usage.get("cached") else 0,
+                        success=1 if llm_available else 0,
+                        error_msg=chunk.get("llm_error", ""),
+                    )
+                    db.add(usage_log)
+                    db.commit()
+
+                    yield f"data: {json.dumps({'type':'done','conversation_id':conv.conversation_id,'sources':[{'title':s['title'],'content':s['content'][:300],'score':s.get('score',0)} for s in sources],'search_method':search_method,'llm_available':llm_available}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -88,6 +111,28 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
         sources=result["sources"]
     )
     db.add(conv)
+    db.commit()
+
+    # 写入 Token 消耗日志
+    usage = result.get("usage", {})
+    usage_log = UsageLog(
+        user_id=user.id,
+        username=user.username,
+        question=req.question,
+        question_hash=hash_question(req.question),
+        model_name=usage.get("model_name", ""),
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        completion_tokens=usage.get("completion_tokens", 0),
+        total_tokens=usage.get("total_tokens", 0),
+        cost=usage.get("cost", 0.0),
+        response_time_ms=usage.get("response_time_ms", 0),
+        search_method=result.get("search_method", ""),
+        source_count=result.get("source_count", len(result.get("sources", []))),
+        cached=1 if usage.get("cached") else 0,
+        success=1 if result.get("llm_available", True) else 0,
+        error_msg=result.get("error_msg", ""),
+    )
+    db.add(usage_log)
     db.commit()
 
     return {

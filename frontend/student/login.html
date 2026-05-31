@@ -204,7 +204,7 @@
   </div>
 
   <!-- ===== 脚本 ===== -->
-  <script src="js/api.js"></script>
+  <script src="js/api.js?v=2"></script>
   <script>
     // ========== 主题管理 ==========
     // 页面加载时读取之前保存的主题
@@ -248,7 +248,9 @@
       errorMsg.style.display = 'none'
 
       try {
+        console.log('[DEBUG] sending login...', { username, url: '/api/auth/login' })
         const res = await apiLogin(username, password)
+        console.log('[DEBUG] response:', res)
 
         if (res.code === 0) {
           // 登录成功 — 保存 token 和用户信息

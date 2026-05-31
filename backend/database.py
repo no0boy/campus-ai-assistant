@@ -4,7 +4,7 @@
 密码使用 SHA256 哈希（演示项目，生产环境建议用 bcrypt）
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -65,6 +65,29 @@ class Conversation(Base):
     answer = Column(Text, nullable=False)
     sources = Column(JSON, default=[])
     feedback = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+# ========== Token 消耗日志表 ==========
+class UsageLog(Base):
+    __tablename__ = "usage_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    username = Column(String(64), default="")
+    question = Column(Text, default="")
+    question_hash = Column(String(64), default="", index=True)
+    model_name = Column(String(64), default="")
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost = Column(Float, default=0.0)
+    response_time_ms = Column(Integer, default=0)
+    search_method = Column(String(32), default="")
+    source_count = Column(Integer, default=0)
+    cached = Column(Integer, default=0)
+    success = Column(Integer, default=1)
+    error_msg = Column(String(512), default="")
     created_at = Column(DateTime, default=datetime.now)
 
 

@@ -9,6 +9,7 @@ import shutil
 from routes.auth import get_current_user
 from database import get_db, User, Document
 from services.rag_service import process_document, delete_document_vectors, get_all_documents_info
+from services.hybrid_search import build_index
 from sqlalchemy.orm import Session
 import config
 
@@ -59,6 +60,9 @@ async def upload_doc(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    # 重建 BM25 索引
+    build_index()
 
     return {
         "code": 0,
@@ -120,5 +124,8 @@ def delete_doc(
     # 3. 删除数据库记录
     db.delete(doc)
     db.commit()
+
+    # 重建 BM25 索引
+    build_index()
 
     return {"code": 0, "message": "文档已删除"}

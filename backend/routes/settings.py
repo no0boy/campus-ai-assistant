@@ -19,7 +19,7 @@ SETTINGS_FILE = "./model_settings.json"
 
 class ModelSettings(BaseModel):
     model_provider: str = "qwen"
-    model_name: str = "qwen-plus"
+    model_name: str = "qwen3.6-plus"
     api_key: str = ""
     api_base: str = ""
     temperature: float = 0.7
