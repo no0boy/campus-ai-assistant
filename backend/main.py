@@ -64,7 +64,30 @@ def startup():
     init_db()
     print("[OK] 数据库就绪")
 
-    # 构建 BM25 索引（异步不阻塞启动）
+    # 自动导入种子文档（知识库为空时）
+    seeds_dir = os.path.join(os.path.dirname(__file__), "seeds")
+    if os.path.exists(seeds_dir):
+        try:
+            from services.rag_service import process_document, collection
+            existing = collection.count()
+            if existing == 0:
+                print("[INFO] 知识库为空，自动导入种子文档...")
+                import_count = 0
+                for f in os.listdir(seeds_dir):
+                    fp = os.path.join(seeds_dir, f)
+                    if f.endswith(".txt"):
+                        process_document(fp, "txt", f)
+                        import_count += 1
+                    elif f.endswith(".pdf"):
+                        process_document(fp, "pdf", f)
+                        import_count += 1
+                print(f"[OK] 已导入 {import_count} 篇种子文档")
+            else:
+                print(f"[INFO] 知识库已有 {existing} 条向量，跳过导入")
+        except Exception as e:
+            print(f"[WARN] 种子文档导入失败: {e}")
+
+    # 构建 BM25 索引
     try:
         from services.hybrid_search import build_index
         bm25_count = build_index()
