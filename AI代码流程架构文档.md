@@ -1,270 +1,121 @@
-# 校园 AI 助手 — 代码流程架构文档
+# 校园AI助手 — 代码架构与设计思路
 
-## 文件结构速览
-
-```
-backend/
-├── main.py                          # FastAPI 入口，启动初始化
-├── config.py                        # 全局配置 + Agent 定义 + 模型定价
-├── database.py                      # SQLAlchemy 数据模型（4 张表）
-├── routes/
-│   ├── auth.py                      # 登录/注册，JWT 签发与验证
-│   ├── chat.py                      # 核心问答接口（普通/Agent/流式）
-│   ├── documents.py                 # 文档上传/列表/删除/预览/统计
-│   ├── stats.py                     # 运营看板数据 API
-│   ├── usage.py                     # Token 消耗 + 缓存统计 API
-│   ├── user.py                      # 用户画像 + 推荐引擎
-│   └── settings.py                  # 模型配置热切换
-├── services/
-│   ├── rag_service.py               # ★ 核心：RAG全流程 + Agent + 缓存 + 压缩
-│   ├── hybrid_search.py             # 混合检索：Dense + BM25 + RRF
-│   └── token_tracker.py             # Token 估算 + 成本计算
-
-frontend/
-├── student/
-│   ├── login.html                   # 登录页（两个大按钮）
-│   ├── index.html                   # 聊天主页
-│   ├── css/style.css
-│   └── js/
-│       ├── api.js                   # 前端 API 封装
-│       └── chat.js                  # 聊天核心逻辑
-├── admin/
-│   ├── login.html
-│   ├── index.html                   # 运营看板（Chart.js）
-│   ├── documents.html               # 知识库管理
-│   └── settings.html                # 模型配置
-```
+> 面试讲项目时照着这份讲，先讲"为什么"，再讲"怎么做"
 
 ---
 
-## 一、用户提问 → AI 回答 全流程
+## 一、项目解决了什么问题
 
-```
-浏览器                                    后端
-──────                                   ────
-1. 用户输入"宿舍几点关门"
-2. chat.js sendMessage()
-   → apiChatAsk(question, ...)
-                                        3. FastAPI 路由到 chat.py
-                                           → POST /api/chat/ask
+通用大模型不知道你们学校的具体规定。问它"宿舍几点关门"会胡编。
 
-                                        4. 解析 JWT Token，获取当前用户
-
-                                        5. ★ ask_with_agent(question, history)
-                                           ├── classify_intent("宿舍几点关门")
-                                           │   → 关键词匹配 → 命中 🏠 宿舍生活助手
-                                           │
-                                           ├── 保存当前模型/提示词状态
-                                           ├── _init_llm("qwen3.6-plus")   # 切模型
-                                           ├── 切换 system_prompt 为宿舍助手专属
-                                           │
-                                           ├── ask(question, history)
-                                           │   ├── [查缓存] query_cache.get()
-                                           │   ├── [压缩] compress_history() 超长则摘要
-                                           │   ├── [检索] hybrid_search()
-                                           │   │   ├── retrieve_context() 向量检索
-                                           │   │   ├── bm25_search() 关键词检索
-                                           │   │   └── RRF 融合排序 → Top-5
-                                           │   ├── [优化] _optimize_sources() 截断去重
-                                           │   ├── [追问] should_follow_up() 模糊则反问
-                                           │   ├── [构建] SystemMessage + HumanMessage
-                                           │   ├── [追踪] TokenTracker.count_prompt()
-                                           │   ├── [调用] llm.invoke(messages) → answer
-                                           │   ├── [追踪] TokenTracker.count_completion()
-                                           │   └── [缓存] query_cache.set()
-                                           │
-                                           ├── 恢复原模型/提示词
-                                           └── 返回 {answer, sources, agent}
-                                        
-                                        6. 保存对话到 Conversation 表
-                                        7. 写入 UsageLog（Token/时间/成本）
-                                        8. 累加文档 access_count
-                                        9. 更新用户记忆 _update_memory()
-
-3'. SSE流式：同上逻辑，但 ask_stream() 用 yield 逐token推送
-   前端逐字渲染
-```
+解决方案：把校园文档（学生手册/奖学金细则等）向量化存起来，用户提问时检索相关片段，拼进 Prompt 给大模型，让它基于真实文档回答——这就是 RAG。
 
 ---
 
-## 二、RAG 检索管道（rag_service.py）
+## 二、整体架构设计
 
 ```
-文档上传 → process_document()
-  ├── parse_pdf() / parse_txt()        解析文本
-  ├── text_splitter.split_text()       切片（500字/片，50字重叠）
-  ├── _embed_batch(texts)              批量向量化（25条/批）
-  └── collection.add()                 存入 ChromaDB
-
-用户提问 → hybrid_search(question)
-  ├── [Dense路] retrieve_context()
-  │   ├── _embed_text(question)        问题向量化
-  │   ├── collection.query()           ChromaDB 相似度检索
-  │   └── 1/(1+distance) → score      余弦距离转相似度
-  ├── [Sparse路] bm25_search()
-  │   ├── _tokenize(question)          jieba 中文分词
-  │   └── _bm25.get_scores()           BM25 关键词打分
-  └── [RRF融合]
-      ├── rrf = 1/(60+rank_d) + 1/(60+rank_s)
-      └── 按 RRF 排序 → Top-5
+┌──────────────┐    ┌─────────────────────────────────┐    ┌──────────┐
+│  前端静态页面  │───▶│  FastAPI 后端（路由/服务/数据三层）  │───▶│  SQLite  │
+│  HTML+CSS+JS │◀───│  routes / services / database   │◀───│ +ChromaDB│
+└──────────────┘    └─────────────────────────────────┘    └──────────┘
 ```
+
+### 为什么选这些技术
+
+| 技术 | 为什么用它 |
+|------|-----------|
+| FastAPI | Python 生态，异步支持好，SSE 流式原生，写 API 快 |
+| LangChain | 统一 OpenAI 兼容层，一个接口调 Qwen/Claude/DeepSeek |
+| ChromaDB | 嵌入式向量库，不需要单独部署服务，适合校园数据量 |
+| SQLite | 零配置，一个文件搞定，HF Space 不支持外部数据库 |
+| Chart.js CDN | 一个 script 标签搞定图表，不装 npm |
 
 ---
 
-## 三、多 Agent 架构
+## 三、RAG 为什么做混合检索
 
-### Agent 定义（config.py AGENTS 字典）
+纯向量检索的问题：能匹配"锁门时间"↔"关门时间"（语义），但可能漏掉精确词匹配。
 
-```python
-"宿舍生活助手": {
-    "keywords": ["宿舍","熄灯","关门",...],   # 关键词匹配
-    "emoji": "🏠",                           # 前端图标
-    "model": "qwen3.6-plus",                 # 专属模型
-    "prompt": "你是校园生活助手..."            # 专属提示词
-}
-```
+纯 BM25 的问题：能精确匹配"宿舍"这个关键词，但不懂"几点锁门"="关门时间"。
 
-### Agent 路由流程
+**混合 = 两者互补**。用 RRF 算法把两路排序结果融合，不依赖分数绝对值，只依赖相对排名。
 
-```
-ask_with_agent(question)
-  → classify_intent(question)
-    → 遍历 AGENTS，统计 question 中匹配的 keywords 数量
-    → 返回最高匹配的 Agent（未匹配则用 校园总助手）
-
-  → 保存当前模型/提示词状态
-  → _init_llm(agent.model)     # 切换到 Agent 专属模型
-  → system_prompt = agent.prompt
-  → ask(question)               # 调 RAG 核心流程
-  → 恢复原模型/提示词
-  → 返回 result + {agent.name, agent.emoji}
-```
-
-### Agent Think-Act 循环（agent_ask）
-
-```
-agent_ask(question)
-  for round in 1..3:
-    ① Think: LLM 决定下一步
-       → "SEARCH: 宿舍管理规定" 或 "ANSWER: 宿舍11点关门"
-    ② Act: 执行决定
-       → SEARCH → hybrid_search(keyword) → 加入上下文
-       → ANSWER → 生成最终回答 → return
-  超 3 轮 → 强制输出
-```
+面试官问"为什么不用更好的 Embedding 模型"：通用模型够用，且你想替换的话改配置即可。
 
 ---
 
-## 四、Token 成本控制
+## 四、为什么做多 Agent 而不是一个大 Prompt
 
-### TokenTracker（token_tracker.py）
+刚开始整一个 Prompt："你是校园助手，回答所有问题"。结果问"奖学金"它翻宿舍文档，问"选课"它翻社团文档——检索不准，回答也偏。
 
-```python
-tracker = TokenTracker(model_name, question)
-tracker.count_prompt(messages)      # tiktoken 估算输入
-tracker.count_completion(answer)    # tiktoken 估算输出
-cost = estimate_cost(model, prompt_tokens, completion_tokens)
-# cost = prompt/1000 * price_in + completion/1000 * price_out
-```
-
-价格表在 config.py MODEL_PRICING，覆盖 Qwen/Claude/DeepSeek/Gemini/Ollama 共 15 种。
-
-### QueryCache（rag_service.py）
-
-- OrderedDict LRU，最大 500 条
-- Key = MD5(question + model)
-- 24h 过期自动淘汰
-- 命中 → 标记 cached=True → 写入 usage_log
-
-### compress_history()
-
-- 计算对话历史 token 数
-- 超 3000 token → 用 qwen-turbo 生成摘要
-- 保留最近 2 轮完整对话
+拆成 5 个 Agent：每人配专属知识库 + 专属 Prompt，检索范围缩小，准确率提升。关键词路由零额外 API 调用，比 LLM 意图分类快且免费。
 
 ---
 
-## 五、数据库表结构
+## 五、Think-Act Agent 循环的原理
 
-### users
-```
-id | username | password | role | grade | major | interests |
-profile_complete | memory_summary | memory_updated_at | created_at
-```
+传统工作流是写死的 if-else，Agent 循环是让 LLM 自己决策：
 
-### conversations
-```
-id | user_id | conversation_id | question | answer | sources(JSON) |
-feedback(0/1/-1) | created_at
-```
+- Think：LLM 分析当前问题+已有信息，决定"搜什么"
+- Act：执行搜索，补充信息
+- 再 Think："信息够了吗？"→ 够就答，不够再搜
 
-### documents
-```
-id | title | file_path | file_type | chunk_count | access_count |
-uploader_id | created_at
-```
-
-### usage_logs
-```
-id | user_id | username | question | question_hash | model_name |
-prompt_tokens | completion_tokens | total_tokens | cost |
-response_time_ms | search_method | source_count | cached | success |
-error_msg | created_at
-```
+保险：最多 3 轮强制终止，防止无限循环烧 Token。
 
 ---
 
-## 六、前端架构
+## 六、Token 成本三板斧
 
-### 学生端页面流
+| 手段 | 原理 | 效果 |
+|------|------|------|
+| LRU 缓存 | 相同问题+相同模型 → 直接返回缓存 | 重复问题 0 Token |
+| 上下文压缩 | 长对话自动摘要，不塞满 Prompt | 多轮对话省 60% Token |
+| Token 追踪 | tiktoken 本地估算，按模型定价实时算钱 | 知道花了多少 |
 
-```
-login.html → 两个大按钮 → quickLogin() → apiLogin() → 存 token → 跳转
-    ↓
-index.html (聊天页)
-    ├── 左侧栏：对话列表 + 🎯为你推荐 + 💡热门推荐
-    ├── 中间：聊天消息区
-    └── 底部：输入框 + 🔧Agent开关 + 发送按钮
-
-chat.js 核心函数调用链：
-  sendMessage()
-    ├── tryParseProfile()      画像采集
-    ├── agentMode ? apiChatAgent() : apiChatAsk()
-    │   └── SSE 流式解析 → onChunk 逐字渲染
-    ├── updateAIMessage()      打字效果
-    └── addSources()           引用来源显示
-```
-
-### 管理后台页面流
-
-```
-login.html → admin/admin123 → 运营看板 index.html
-    ├── 6 卡片 + 4 图表 (Chart.js)
-    └── 每 60s 自动刷新
-
-documents.html（知识库管理）
-    ├── 上传 → process_document() → 切片 → 向量化
-    ├── 列表（含引用次数）→ 搜索 → 预览切片 → 删除
-    └── 批量删除
-
-settings.html（模型配置）
-    └── 管理员切换模型/参数 → reload_llm() 热生效
-```
+面试官问"缓存什么时候更新"：24h 过期 + 知识库变化时手动清空。
 
 ---
 
-## 七、安全设计
+## 七、成本为什么用 tiktoken 而不用 API 返回值
 
-```
-API Key 保护：
-  config.py           → .gitignore 排除（本地）
-  config.example.py   → GitHub 公开模板（空 Key）
-  HF Space Secrets    → 云端加密注入（DASHSCOPE_API_KEY）
-  api.txt             → 已删除
+API 返回 Token 数是精确的，但需要多一次网络调用。tiktoken 本地估算误差 <5%，够用且零开销。
 
-JWT Token：
-  72h 过期 | HS256 签名 | Bearer 头传递
+面试官可能追问"误差在什么场景下大"：非标准模型误差 5-10%，但相对关系正确——贵的就是贵的。
 
-密码：
-  SHA256(secret_key + password)，生产建议改 bcrypt
-```
+---
+
+## 八、为什么用户画像是欢迎引导而不是表单
+
+表单太生硬。用对话式采集："你是大几的？什么专业？"——用户觉得自然，同时拿到了年级+专业用于个性化推荐。
+
+长期记忆用话题统计而非 LLM 摘要：省 Token，且能形成可解释的标签（"关注宿舍、奖学金"）。
+
+---
+
+## 九、设计中的取舍
+
+| 取舍 | 做了什么 | 为什么 |
+|------|---------|--------|
+| 不做 Redis | LRU 内存缓存 | HF Space 不支持 Redis，500 条内存够用 |
+| 不做 MySQL | SQLite | 改配置即可迁移，Demo 够用可讲 |
+| 不做 Pinecone | ChromaDB | 嵌入式不需要外部服务 |
+| 不做微服务 | 单体 FastAPI | 校招项目重内容，架构复杂度适可而止 |
+| 不引入前端框架 | Vanilla JS | 面试官看的是 AI 能力，不是 React 熟练度 |
+
+---
+
+## 十、面试怎么讲这个项目
+
+**30 秒版（自我介绍用）**
+
+"我做了一个校园 RAG 知识库问答系统，核心亮点是混合检索、多 Agent 协作、Think-Act 自主决策循环，以及完整的 Token 成本控制体系。已上线 HuggingFace 可体验。"
+
+**3 分钟版（项目深挖用）**
+
+1. 背景：通用大模型不懂校园，用 RAG 解决（30s）
+2. 检索：为什么做混合检索，怎么做的（30s）
+3. Agent：从单一大 Prompt 到 5 Agent 的演进，Agent 循环原理（45s）
+4. 成本：三板斧——缓存/压缩/追踪（30s）
+5. 用户画像：对话式采集 + 长期记忆 + 千人千面推荐（30s）
+6. 总结：已上线，GitHub 开源（15s）
