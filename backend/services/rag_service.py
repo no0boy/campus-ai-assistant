@@ -494,6 +494,60 @@ def _optimize_sources(sources: list[dict]) -> list[dict]:
     return optimized
 
 
+# ==================== AI 追问机制 ====================
+
+# 模糊/需要追问的关键词
+VAGUE_PATTERNS = ["那个", "这个", "它", "怎么办", "怎么样", "好不好", "行不行", "能不能", "是什么", "什么意思"]
+
+FOLLOWUP_PROMPT = """用户问了一个比较模糊的问题。请用友好的语气追问一句，帮用户澄清意图。
+
+用户问题：{question}
+
+可能的意图方向：{context}
+
+请用一个简洁的追问（不超过30字）："""
+
+
+def should_follow_up(question: str, sources: list[dict]) -> bool:
+    """判断是否需要 AI 追问"""
+    # 太短
+    if len(question.strip()) < 6:
+        return True
+    # 无检索结果
+    if not sources:
+        return True
+    # 所有结果低相似度
+    if all(s.get("score", 0) < 0.5 for s in sources):
+        return True
+    # 模糊关键词
+    if any(kw in question for kw in VAGUE_PATTERNS):
+        return True
+    return False
+
+
+def generate_followup(question: str, sources: list[dict]) -> str:
+    """生成追问"""
+    context = "、".join([s.get("title", "") for s in sources[:3]]) if sources else "知识库中的各类校园信息"
+    fp = FOLLOWUP_PROMPT.format(question=question, context=context)
+
+    try:
+        fu_llm = ChatOpenAI(
+            model="qwen-turbo",
+            api_key=current_api_key or config.DASHSCOPE_API_KEY,
+            base_url=current_api_base or config.LLM_BASE_URL,
+            temperature=0.5,
+            max_tokens=80
+        )
+        resp = fu_llm.invoke([HumanMessage(content=fp)])
+        return "🤔 " + resp.content.strip()
+    except Exception:
+        # 降级追问
+        if sources:
+            titles = "、".join([s.get("title", "") for s in sources[:2]])
+            return f"🤔 这个问题涉及的内容比较多，你想了解「{titles}」哪方面的信息呢？"
+        return "🤔 不太确定你想了解什么，能再说具体一点吗？比如你想问校园的哪个方面？"
+
+
 # ==================== Agent 路由 ====================
 
 def classify_intent(question: str) -> dict:
@@ -629,7 +683,6 @@ def ask(question: str, conversation_history: list[dict] = None) -> dict:
     # ====== 0. 查缓存 ======
     cached = query_cache.get(question, model_name)
     if cached:
-        # 缓存命中：重建 tracker 数据（标记为缓存）
         tracker = TokenTracker(model_name=model_name, question=question)
         tracker.cached = True
         tracker.count_prompt_text(question)
@@ -649,12 +702,11 @@ def ask(question: str, conversation_history: list[dict] = None) -> dict:
     if conversation_history:
         conversation_history = compress_history(conversation_history)
 
-    # 初始化 Token 追踪器
     tracker = TokenTracker(model_name=model_name, question=question)
 
     search_method = "vector"
 
-    # ====== 2. 检索（混合检索：Dense + BM25 + RRF 融合）======
+    # ====== 2. 检索 ======
     try:
         sources = hybrid_search(question)
         if sources and any(s.get("source") == "hybrid" for s in sources):
@@ -669,6 +721,18 @@ def ask(question: str, conversation_history: list[dict] = None) -> dict:
 
     # ====== 3. 上下文优化 ======
     sources = _optimize_sources(sources)
+
+    # ====== 追问检测 ======
+    if should_follow_up(question, sources):
+        followup = generate_followup(question, sources)
+        tracker.count_completion(followup)
+        return {
+            "answer": followup, "sources": sources,
+            "is_fallback": False, "search_method": search_method,
+            "llm_available": True, "usage": tracker.to_dict(),
+            "source_count": len(sources), "error_msg": "",
+            "is_followup": True,
+        }
 
     # ====== 4. 构建 messages ======
     prompt_to_use = current_system_prompt if current_system_prompt else SYSTEM_PROMPT
@@ -813,6 +877,16 @@ def ask_stream(question: str, conversation_history: list[dict] = None):
 
     # ====== 3. 上下文优化 ======
     sources = _optimize_sources(sources)
+
+    # ====== 追问检测（流式）======
+    if should_follow_up(question, sources):
+        followup = generate_followup(question, sources)
+        tracker.count_completion(followup)
+        yield {"type": "meta", "sources": sources, "search_method": search_method}
+        yield {"type": "chunk", "text": followup}
+        yield {"type": "done", "usage": tracker.to_dict(), "source_count": len(sources),
+               "llm_error": "", "is_followup": True}
+        return
 
     # ====== 4. 构建 messages ======
     prompt_to_use = current_system_prompt if current_system_prompt else SYSTEM_PROMPT

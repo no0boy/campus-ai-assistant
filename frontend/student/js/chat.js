@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme()
   loadUserInfo()
   loadConversations()
+  loadTrending()
   autoResizeTextarea()
 })
 
@@ -57,6 +58,31 @@ function closeSidebar() {
 }
 
 // ========== 对话管理 ==========
+
+/** 加载热门推荐 */
+async function loadTrending() {
+  const el = document.getElementById('trendingList')
+  if (!el) return
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(BASE_URL + '/api/stats/dashboard', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+    const hot = data.code === 0 ? (data.data?.hot_questions || []) : []
+    if (hot.length > 0) {
+      el.innerHTML = hot.slice(0, 6).map((q, i) => `
+        <div class="trending-item" onclick="sendQuick('${escapeHtml(q.question)}')" title="${escapeHtml(q.question)}">
+          ${i + 1}. ${escapeHtml(q.question)}
+        </div>
+      `).join('')
+    } else {
+      el.innerHTML = '<div style="font-size:11px;color:var(--text-light);text-align:center;padding:8px;">暂无数据</div>'
+    }
+  } catch(e) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text-light);text-align:center;padding:8px;">暂无数据</div>'
+  }
+}
 
 /** 加载本地对话历史（当前用 localStorage，后面改调 API） */
 function loadConversations() {
