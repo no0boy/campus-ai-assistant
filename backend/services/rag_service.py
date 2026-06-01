@@ -763,15 +763,39 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
 
 
 def agent_ask_stream(question: str, conversation_history: list[dict] = None):
-    """Agent 流式版"""
-    result = agent_ask(question, conversation_history)
-    # 分段推送
-    answer = result.get("answer", "")
-    yield {"type": "meta", "sources": result.get("sources", []), "search_method": result.get("search_method", "agent")}
-    chunk_size = 30
-    for i in range(0, len(answer), chunk_size):
-        yield {"type": "chunk", "text": answer[i:i + chunk_size]}
-    yield {"type": "done", "source_count": len(result.get("sources", [])), "llm_error": ""}
+    """Agent 流式版 — 先推心跳避免前端超时"""
+    import concurrent.futures
+
+    # 先推心跳，防止前端超时断开
+    yield {"type": "chunk", "text": "🧠 Agent 思考中...\n"}
+    yield {"type": "meta", "sources": [], "search_method": "agent"}
+
+    # 用线程执行 agent_ask，避免阻塞
+    result = None
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(agent_ask, question, conversation_history)
+            # 心跳：每 2 秒发一个点
+            import time
+            dots = 0
+            while not future.done():
+                time.sleep(2)
+                dots += 1
+                if dots <= 5:
+                    yield {"type": "chunk", "text": "."}
+            result = future.result(timeout=30)
+    except concurrent.futures.TimeoutError:
+        result = {"answer": "⏰ Agent 思考超时，请换个简单的问题试试。", "sources": [], "search_method": "agent-timeout"}
+    except Exception as e:
+        result = {"answer": f"Agent 执行失败：{str(e)[:100]}", "sources": [], "search_method": "agent-error"}
+
+    # 发送最终结果
+    answer = result.get("answer", "抱歉，处理失败。")
+    # 如果已经在上面发了部分内容，这里补发完整的
+    sources = result.get("sources", [])
+    yield {"type": "meta", "sources": sources, "search_method": result.get("search_method", "agent")}
+    yield {"type": "chunk", "text": "\n" + answer}
+    yield {"type": "done", "source_count": len(sources), "llm_error": ""}
 
 
 def keyword_search(question: str) -> list[dict]:
