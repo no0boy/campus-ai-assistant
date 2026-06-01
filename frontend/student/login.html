@@ -169,8 +169,8 @@
           <label>学号 / 用户名</label>
           <div class="input-icon">
             <span class="icon">👤</span>
-            <input type="text" class="input" id="username"
-                   placeholder="请输入学号或用户名" required autocomplete="username">
+            <input type="text" class="input" id="username" value="student"
+                   placeholder="请输入学号或用户名" autocomplete="username">
           </div>
         </div>
 
@@ -183,18 +183,14 @@
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary login-btn" id="submitBtn">
-          登 录
+        <button type="button" class="btn btn-primary login-btn"
+                onclick="quickLogin('student','123456')"
+                style="font-size:18px;padding:14px;">
+          🚀 立即体验
         </button>
-
-        <button type="button" class="btn btn-outline login-btn" style="margin-top:8px;"
-                onclick="quickLogin('student','123456')">
-          ⚡ 一键体验（学生）
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm login-btn" style="margin-top:4px;"
-                onclick="quickLogin('admin','admin123')">
-          管理员入口
-        </button>
+        <div class="login-footer">
+          <a href="#" onclick="quickLogin('admin','admin123')" style="font-size:12px;color:var(--text-light);">管理员入口</a>
+        </div>
       </form>
 
       <div class="login-footer">
