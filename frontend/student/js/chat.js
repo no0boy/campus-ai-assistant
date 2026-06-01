@@ -308,7 +308,7 @@ function newChat() {
   messagesEl.innerHTML = `
     <div class="welcome" id="welcomeScreen">
       <div class="welcome-icon">🎓</div>
-      <h2>你好！我是校园 AI 助手</h2>
+      <h2>你好！我是校园AI知识平台</h2>
       <p>我可以帮你解答选课、奖助学金、宿舍规定、军训安排等校园相关问题。点击上方快捷问题或直接输入开始提问吧！</p>
     </div>
   `
@@ -481,7 +481,7 @@ function appendMessage(role, content, sources = [], isLoading = false) {
 
   const avatarEmoji = role === 'user' ? '👤' : '🤖'
   const avatarClass = role === 'user' ? 'user' : 'ai'
-  const roleLabel = role === 'user' ? '你' : '校园 AI 助手'
+  const roleLabel = role === 'user' ? '你' : '校园AI知识平台'
 
   msgDiv.innerHTML = `
     <div class="msg-avatar ${avatarClass}">${avatarEmoji}</div>

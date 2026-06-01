@@ -1,5 +1,5 @@
 ---
-title: 校园智能 AI 助手 v3.0
+title: 校园AI知识平台 v3.0
 emoji: 🎓
 colorFrom: blue
 colorTo: indigo

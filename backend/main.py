@@ -17,7 +17,7 @@ import config
 
 # ========== 创建 FastAPI 应用 ==========
 app = FastAPI(
-    title="校园 AI 助手 API",
+    title="校园AI知识平台 API",
     description="基于 RAG 知识库的校园智能问答系统",
     version="3.0.0"
 )
