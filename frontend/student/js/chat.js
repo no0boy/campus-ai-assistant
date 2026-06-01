@@ -36,13 +36,22 @@ function initTheme() {
 }
 function toggleAgentMode() {
   agentMode = !agentMode
+  // 更新侧边栏开关
+  const sw = document.getElementById('agentSwitch')
+  if (sw) {
+    if (agentMode) sw.classList.add('agent-on')
+    else sw.classList.remove('agent-on')
+  }
+  // 更新输入框旁的按钮
   const btn = document.getElementById('agentToggle')
-  if (agentMode) {
-    btn.style.background = '#3b82f6'; btn.style.color = '#fff'
-    btn.textContent = '🧠'; btn.title = 'Agent模式（思考-行动循环）'
-  } else {
-    btn.style.background = ''; btn.style.color = ''
-    btn.textContent = '🔧'; btn.title = '普通模式'
+  if (btn) {
+    if (agentMode) {
+      btn.style.background = '#8b5cf6'; btn.style.color = '#fff'
+      btn.textContent = '🧠'
+    } else {
+      btn.style.background = ''; btn.style.color = ''
+      btn.textContent = '🔧'
+    }
   }
 }
 
