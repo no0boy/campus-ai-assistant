@@ -11,7 +11,8 @@ import json
 from routes.auth import get_current_user
 from database import get_db, User, Conversation, UsageLog, Document
 from services.rag_service import ask, ask_stream, ask_with_agent, ask_stream_with_agent
-from services.token_tracker import hash_question
+from services.token_tracker import hash_question, count_tokens
+import config as _cfg
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/chat", tags=["聊天"])
@@ -110,6 +111,9 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
                                 doc.access_count = (doc.access_count or 0) + 1
                     db.commit()
 
+                    # 更新用户长期记忆
+                    _update_memory(user, req.question, full_answer, db)
+
                     done_data = {
                         'type':'done',
                         'conversation_id':conv.conversation_id,
@@ -165,6 +169,9 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
                 doc.access_count = (doc.access_count or 0) + 1
     db.commit()
 
+    # 更新用户长期记忆（每 5 轮总结一次）
+    _update_memory(user, req.question, result.get("answer", ""), db)
+
     return {
         "code": 0,
         "message": "success",
@@ -216,3 +223,38 @@ def feedback(conversation_id: str, message_id: int, feedback_value: int,
     conv.feedback = feedback_value
     db.commit()
     return {"code": 0, "message": "反馈已提交"}
+
+
+# ==================== 用户记忆管理 ====================
+
+def _update_memory(user, question: str, answer: str, db):
+    """
+    更新用户长期记忆：每对话 5 轮后生成一次摘要
+    用简单的历史拼接，不调 LLM（省 Token）
+    """
+    # 统计该用户已有对话数
+    from database import Conversation
+    conv_count = db.query(Conversation).filter(
+        Conversation.user_id == user.id
+    ).count()
+
+    # 每 5 轮更新一次记忆
+    if conv_count % 5 == 0 and conv_count > 0:
+        # 取最近 10 条对话
+        recent = db.query(Conversation).filter(
+            Conversation.user_id == user.id
+        ).order_by(Conversation.created_at.desc()).limit(10).all()
+
+        topics = set()
+        for c in recent:
+            for kw in ["奖学金", "宿舍", "选课", "社团", "军训", "考试", "毕业"]:
+                if kw in (c.question or "") or kw in (c.answer or ""):
+                    topics.add(kw)
+
+        summary = "关注话题：" + "、".join(sorted(topics)) if topics else "浏览过校园知识库"
+        summary += f"（共对话 {conv_count} 轮）"
+
+        user.memory_summary = summary[:500]
+        from datetime import datetime
+        user.memory_updated_at = datetime.now()
+        db.commit()

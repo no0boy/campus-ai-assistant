@@ -38,6 +38,13 @@ class User(Base):
     password = Column(String(256), nullable=False)
     role = Column(String(16), default="student")
     avatar = Column(String(256), default="")
+    # 用户画像
+    grade = Column(String(16), default="")          # 大一/大二/大三/大四/研究生
+    major = Column(String(64), default="")          # 专业名称
+    interests = Column(String(256), default="")     # 兴趣标签（逗号分隔）
+    profile_complete = Column(Integer, default=0)   # 0=未完善 1=已完善
+    memory_summary = Column(Text, default="")       # 历史对话摘要（长期记忆）
+    memory_updated_at = Column(DateTime, default=datetime.now)
     created_at = Column(DateTime, default=datetime.now)
 
 

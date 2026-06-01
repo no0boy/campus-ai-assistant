@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadUserInfo()
   loadConversations()
   loadTrending()
+  checkWelcome()
   autoResizeTextarea()
 })
 
@@ -55,6 +56,115 @@ function openSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open')
   document.getElementById('sidebarOverlay').classList.remove('show')
+}
+
+// ========== 欢迎流程 & 用户画像 ==========
+
+let userProfile = { grade: '', major: '', profile_complete: 0 }
+
+async function checkWelcome() {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(BASE_URL + '/api/user/welcome', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+    if (data.code !== 0) return
+
+    userProfile.grade = data.data.grade || ''
+    userProfile.major = data.data.major || ''
+    userProfile.profile_complete = data.data.profile_complete || 0
+
+    // 更新侧边栏显示年级专业
+    const nameEl = document.getElementById('sidebarName')
+    if (nameEl) {
+      let label = JSON.parse(localStorage.getItem('user') || '{}').username || '用户'
+      if (userProfile.grade && userProfile.major) {
+        label += ` · ${userProfile.grade} ${userProfile.major}`
+      }
+      nameEl.textContent = label
+    }
+
+    if (data.data.is_new) {
+      // 首次登录，显示欢迎引导
+      appendMessage('ai', data.data.welcome_msg, [], false)
+      document.getElementById('welcomeScreen')?.remove()
+      scrollToBottom()
+    } else if (data.data.welcome_msg) {
+      // 老用户回来，显示记忆
+      const welcomeScreen = document.getElementById('welcomeScreen')
+      if (welcomeScreen) {
+        welcomeScreen.querySelector('h2').textContent = `欢迎回来，${JSON.parse(localStorage.getItem('user') || '{}').username || ''}！`
+        welcomeScreen.querySelector('p').textContent = data.data.welcome_msg
+      }
+    }
+  } catch (e) {
+    console.error('welcome check failed:', e)
+  }
+}
+
+/** 从用户消息中解析年级和专业 */
+function tryParseProfile(input) {
+  if (userProfile.profile_complete) return false
+
+  const text = input.trim()
+  // 匹配年级
+  const gradeMap = {
+    '大一': '大一', '大二': '大二', '大三': '大三', '大四': '大四',
+    '研一': '研一', '研二': '研二', '研三': '研三', '研究生': '研究生',
+    '1': '大一', '2': '大二', '3': '大三', '4': '大四'
+  }
+  let grade = ''
+  for (const [k, v] of Object.entries(gradeMap)) {
+    if (text.includes(k)) { grade = v; break }
+  }
+
+  // 匹配专业（简单规则：包含"专业"或"技术"或"工程"等）
+  const majorPatterns = ['软件', '计算机', '网络', '电子', '机械', '土木',
+    '会计', '金融', '英语', '日语', '设计', '电商', '工商', '大数据', '人工智能']
+  let major = userProfile.major || ''
+  for (const p of majorPatterns) {
+    if (text.includes(p)) { major = p + '技术'; break }
+  }
+  // 去掉重复的"技术技术"
+  major = major.replace('技术技术', '技术')
+
+  if (grade || major) {
+    userProfile.grade = grade || userProfile.grade
+    userProfile.major = major || userProfile.major
+    saveProfile()
+    return grade && major  // 两个都收集到才算完成
+  }
+  return false
+}
+
+async function saveProfile() {
+  const allDone = userProfile.grade && userProfile.major
+  try {
+    const token = localStorage.getItem('token')
+    await fetch(BASE_URL + '/api/user/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        grade: userProfile.grade,
+        major: userProfile.major,
+        profile_complete: allDone ? 1 : 0
+      })
+    })
+    if (allDone) {
+      userProfile.profile_complete = 1
+      // 更新侧边栏
+      const nameEl = document.getElementById('sidebarName')
+      if (nameEl) {
+        const username = JSON.parse(localStorage.getItem('user') || '{}').username || '用户'
+        nameEl.textContent = `${username} · ${userProfile.grade} ${userProfile.major}`
+      }
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // ========== 对话管理 ==========
@@ -218,6 +328,21 @@ async function sendMessage() {
   // 显示用户消息
   appendMessage('user', question)
   scrollToBottom()
+
+  // 解析用户画像
+  const profileWasIncomplete = !userProfile.profile_complete
+  const justCompleted = tryParseProfile(question)
+  if (justCompleted && profileWasIncomplete) {
+    // 画像刚完成，AI 确认
+    setTimeout(() => {
+      appendMessage('ai',
+        `太好了，已经记住你啦！🎉\n\n` +
+        `**${userProfile.grade} ${userProfile.major}** — 我会帮你关注和你最相关的校园信息。\n\n` +
+        `有什么想了解的尽管问我～`, [], false)
+      scrollToBottom()
+    }, 500)
+    return
+  }
 
   // 显示加载状态：正在检索
   const aiMsg = appendMessage('ai', '', [], true)

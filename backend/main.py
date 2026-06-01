@@ -12,7 +12,7 @@ import os
 
 from database import init_db
 from routes import auth, chat, documents, stats, settings
-from routes import usage
+from routes import usage, user
 import config
 
 # ========== 创建 FastAPI 应用 ==========
@@ -38,6 +38,7 @@ app.include_router(documents.router)
 app.include_router(stats.router)
 app.include_router(settings.router)
 app.include_router(usage.router)
+app.include_router(user.router)
 
 # ========== 前端静态文件（部署用） ==========
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
