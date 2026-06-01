@@ -524,43 +524,62 @@ def ask_with_agent(question: str, conversation_history: list[dict] = None) -> di
     """
     Agent 路由版问答：
     1. 意图分类 → 匹配 Agent
-    2. 用 Agent 专属 Prompt 调 RAG 生成
+    2. 切换专属模型 + Prompt
+    3. 调 RAG 生成 → 恢复原模型
     """
     agent = classify_intent(question)
 
-    # 临时替换 system prompt 为 Agent 专属
-    global current_system_prompt
+    # 保存当前模型/ Prompt 状态
+    global current_system_prompt, current_llm_model
     saved_prompt = current_system_prompt
+    saved_model = current_llm_model
+
+    # 切换 Agent 专属模型 + Prompt
+    agent_model = agent.get("model", saved_model)
+    if agent_model != current_llm_model:
+        _init_llm(model_name=agent_model)
     current_system_prompt = agent["prompt"]
+
     try:
         result = ask(question, conversation_history)
     finally:
-        current_system_prompt = saved_prompt  # 恢复
+        # 恢复原模型
+        if agent_model != saved_model:
+            _init_llm(model_name=saved_model)
+        current_system_prompt = saved_prompt
 
-    # 标记来源 Agent
-    result["agent"] = {"name": agent["name"], "emoji": agent["emoji"]}
+    result["agent"] = {"name": agent["name"], "emoji": agent["emoji"], "model": agent_model}
     return result
 
 
 def ask_stream_with_agent(question: str, conversation_history: list[dict] = None):
     """
     Agent 路由版流式问答
-    截获 ask_stream 的 done 事件，注入 agent 信息
+    切换模型 → 专属 Prompt → RAG 流式 → 恢复
     """
     agent = classify_intent(question)
 
-    # 先发 agent 信息
-    yield {"type": "agent", "name": agent["name"], "emoji": agent["emoji"]}
+    # 先发 agent 信息（含模型名）
+    yield {"type": "agent", "name": agent["name"], "emoji": agent["emoji"], "model": agent.get("model", "")}
 
-    global current_system_prompt
+    global current_system_prompt, current_llm_model
     saved_prompt = current_system_prompt
+    saved_model = current_llm_model
+
+    # 切换 Agent 专属模型
+    agent_model = agent.get("model", saved_model)
+    if agent_model != current_llm_model:
+        _init_llm(model_name=agent_model)
     current_system_prompt = agent["prompt"]
+
     try:
         for event in ask_stream(question, conversation_history):
             if event["type"] == "done":
-                event["agent"] = {"name": agent["name"], "emoji": agent["emoji"]}
+                event["agent"] = {"name": agent["name"], "emoji": agent["emoji"], "model": agent_model}
             yield event
     finally:
+        if agent_model != saved_model:
+            _init_llm(model_name=saved_model)
         current_system_prompt = saved_prompt
 
 
