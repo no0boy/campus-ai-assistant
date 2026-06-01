@@ -649,7 +649,7 @@ AGENT_THINK_PROMPT = """你是校园助手，可以通过多步检索和外部�
 - TOOL: 网页搜索 关键词   → 搜网页
 - ANSWER: <回答>   → 信息够了，生成回答
 
-注意：最多 5 步。"""
+注意：最多 3 步。"""
 
 
 def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
@@ -657,7 +657,7 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
     Think-Act Agent 主循环
     LLM 自主决策：查什么、查几次、何时回答
     """
-    max_rounds = 5
+    max_rounds = 3
     context_parts = []
     search_method = "agent"
     sources_all = []
@@ -669,8 +669,20 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
         result["search_method"] = "agent-fallback"
         return result
 
+    # 用快速模型做 Think 决策，省时间
+    try:
+        from langchain_openai import ChatOpenAI
+        think_llm = ChatOpenAI(
+            model="qwen-turbo",
+            api_key=current_api_key or config.DASHSCOPE_API_KEY,
+            base_url=current_api_base or config.LLM_BASE_URL,
+            temperature=0, max_tokens=100
+        )
+    except Exception:
+        think_llm = llm
+
     for round_num in range(max_rounds):
-        # ====== Think: LLM 决定下一步 ======
+        # ====== Think: 快速模型决策下一步 ======
         ctx_text = "\n".join(context_parts) if context_parts else "（尚未检索）"
         think_prompt = AGENT_THINK_PROMPT.format(
             question=question, context=ctx_text, tools=TOOL_DESCRIPTIONS
@@ -678,7 +690,7 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
 
         try:
             from langchain_core.messages import HumanMessage
-            think_msg = llm.invoke([HumanMessage(content=think_prompt)])
+            think_msg = think_llm.invoke([HumanMessage(content=think_prompt)])
             think_result = think_msg.content.strip()
         except Exception:
             think_result = "ANSWER: 抱歉，服务暂时不可用。"
