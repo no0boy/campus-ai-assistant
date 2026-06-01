@@ -404,12 +404,23 @@ async function sendMessage() {
       updateAIMessage(aiMsg, fullAnswer, false)
       scrollToBottom()
     }, currentAbortController.signal, (agentName, agentEmoji) => {
-      // 立即更新 AI 消息角色标签，显示是哪个 Agent 在回答
       const roleEl = aiMsg.querySelector('.msg-role')
       if (roleEl) {
-        roleEl.innerHTML = agentEmoji + ' <strong>' + agentName + '</strong>'
+        roleEl.innerHTML = agentEmoji + ' <strong>' + agentName + '</strong> 回答中...'
         roleEl.style.color = 'var(--primary)'
       }
+      // 插入 Agent 来源卡片
+      const card = document.createElement('div')
+      card.className = 'agent-card'
+      card.innerHTML = `
+        <div class="agent-card-icon">${agentEmoji || '🤖'}</div>
+        <div class="agent-card-info">
+          <div class="agent-card-name">${agentName}</div>
+          <div class="agent-card-model">专属Agent · 检索中...</div>
+        </div>
+      `
+      const contentEl = aiMsg.querySelector('.msg-content')
+      contentEl.insertBefore(card, contentEl.querySelector('.msg-sources'))
       updateAIStatus(aiMsg, '检索知识库中...')
     })
 
@@ -420,8 +431,24 @@ async function sendMessage() {
       llmAvailable = d.llm_available !== false
 
       const agentName = (d.agent && d.agent.name) ? (d.agent.emoji || '') + ' ' + d.agent.name : ''
+      const agentModel = (d.agent && d.agent.model) ? d.agent.model : ''
       const sourceCount = sources.length
-      let statusLine = (agentName ? agentName + ' · ' : '') + (sourceCount > 0
+
+      // Agent 来源卡片
+      if (agentName) {
+        const agentCard = document.createElement('div')
+        agentCard.className = 'agent-card'
+        agentCard.innerHTML = `
+          <div class="agent-card-icon">${d.agent.emoji || '🤖'}</div>
+          <div class="agent-card-info">
+            <div class="agent-card-name">${d.agent.name} 回答</div>
+            <div class="agent-card-model">${agentModel} · ${searchMethod}检索 · ${sourceCount}条来源</div>
+          </div>
+        `
+        aiMsg.querySelector('.msg-content').insertBefore(agentCard, aiMsg.querySelector('.msg-sources'))
+      }
+
+      let statusLine = (sourceCount > 0
         ? sourceCount + '条相关内容（' + searchMethod + '检索）' + (llmAvailable ? '  AI已生成回答' : '  已返回原始内容')
         : '知识库无匹配内容，AI直接回答')
       if (res.aborted) {

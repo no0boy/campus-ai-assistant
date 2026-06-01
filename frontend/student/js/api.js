@@ -114,9 +114,9 @@ async function apiChatAsk(question, conversationId = null, stream = true, onChun
 
             if (payload.type === 'agent') {
               finalData = finalData || {}
-              finalData.agent = { name: payload.name, emoji: payload.emoji }
+              finalData.agent = { name: payload.name, emoji: payload.emoji, model: payload.model || '' }
               if (typeof onAgent === 'function') {
-                onAgent(payload.name, payload.emoji)
+                onAgent(payload.name, payload.emoji, payload.model || '')
               }
             } else if (payload.type === 'chunk') {
               fullAnswer += payload.text
