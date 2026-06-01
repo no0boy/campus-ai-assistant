@@ -19,7 +19,7 @@ import config
 app = FastAPI(
     title="校园 AI 助手 API",
     description="基于 RAG 知识库的校园智能问答系统",
-    version="1.0.0"
+    version="3.0.0"
 )
 
 # ========== CORS ==========
