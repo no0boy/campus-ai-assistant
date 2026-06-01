@@ -628,6 +628,121 @@ def ask_stream_with_agent(question: str, conversation_history: list[dict] = None
         current_system_prompt = saved_prompt
 
 
+# ==================== Think-Act Agent 循环 ====================
+
+AGENT_THINK_PROMPT = """你是校园助手，你的任务是通过多步检索来回答用户问题。
+
+【用户问题】：{question}
+
+【你已经检索到的信息】：
+{context}
+
+【你的知识库包含这些文档】：奖学金评定细则、广东岭南职业技术学院学生手册（含宿舍/考试/处分/军训/助学贷款）、社团管理办法、选课指南
+
+请决定下一步：
+- 如果还需要查更多信息，输出 SEARCH: <搜索关键词>
+- 如果信息足够回答，输出 ANSWER: <完整回答>
+
+注意：最多检索 3 次。"""
+
+
+def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
+    """
+    Think-Act Agent 主循环
+    LLM 自主决策：查什么、查几次、何时回答
+    """
+    max_rounds = 3
+    context_parts = []
+    search_method = "agent"
+    sources_all = []
+
+    for round_num in range(max_rounds):
+        # ====== Think: LLM 决定下一步 ======
+        ctx_text = "\n".join(context_parts) if context_parts else "（尚未检索）"
+        think_prompt = AGENT_THINK_PROMPT.format(question=question, context=ctx_text)
+
+        try:
+            from langchain_core.messages import HumanMessage
+            think_msg = llm.invoke([HumanMessage(content=think_prompt)])
+            think_result = think_msg.content.strip()
+        except Exception:
+            think_result = "ANSWER: 抱歉，服务暂时不可用。"
+
+        # ====== Act: 执行 LLM 的决定 ======
+        if think_result.startswith("SEARCH:") or think_result.startswith("搜索:") or think_result.startswith("search:"):
+            keyword = think_result.split(":", 1)[1].strip() if ":" in think_result else question
+
+            # 检索知识库
+            srcs = hybrid_search(keyword)
+            if not srcs:
+                srcs = keyword_search(keyword)
+
+            sources_all.extend(srcs)
+            snippets = [f"[{s.get('title','')}] {s.get('content','')[:200]}" for s in srcs[:3]]
+            context_parts.append(f"第{round_num + 1}次检索({keyword})：\n" + "\n---\n".join(snippets))
+
+            # 去重
+            context_parts = list(dict.fromkeys(context_parts))
+
+        elif think_result.startswith("ANSWER:") or think_result.startswith("回答:"):
+            answer = think_result.split(":", 1)[1].strip() if ":" in think_result else think_result
+
+            # 用查到的上下文让 LLM 生成更流式的回答
+            try:
+                if context_parts:
+                    final_prompt = f"基于以下检索到的信息，回答用户问题。\n\n检索信息：\n" + "\n".join(context_parts[-2:]) + f"\n\n用户问题：{question}\n\n请简洁回答："
+                    final_msg = llm.invoke([HumanMessage(content=final_prompt)])
+                    answer = final_msg.content.strip()
+            except Exception:
+                pass
+
+            return {
+                "answer": answer,
+                "sources": sources_all,
+                "search_method": f"agent-{round_num + 1}步",
+                "llm_available": True,
+                "usage": {"rounds": round_num + 1},
+                "source_count": len(sources_all),
+                "error_msg": "",
+            }
+        else:
+            # LLM 没按格式输出 → 直接当回答
+            context_parts.append(think_result)
+
+    # 超过最大轮数 → 强出结果
+    if context_parts:
+        try:
+            final_prompt = f"基于检索信息回答：\n" + "\n".join(context_parts[-2:]) + f"\n\n问题：{question}"
+            final_msg = llm.invoke([HumanMessage(content=final_prompt)])
+            answer = final_msg.content.strip()
+        except Exception:
+            answer = "抱歉，处理超时，请换个方式提问。"
+    else:
+        answer = "抱歉，未找到相关信息。"
+
+    return {
+        "answer": answer,
+        "sources": sources_all,
+        "search_method": f"agent-{max_rounds}步(max)",
+        "llm_available": True,
+        "usage": {"rounds": max_rounds},
+        "source_count": len(sources_all),
+        "error_msg": "",
+    }
+
+
+def agent_ask_stream(question: str, conversation_history: list[dict] = None):
+    """Agent 流式版"""
+    result = agent_ask(question, conversation_history)
+    # 分段推送
+    answer = result.get("answer", "")
+    yield {"type": "meta", "sources": result.get("sources", []), "search_method": result.get("search_method", "agent")}
+    chunk_size = 30
+    for i in range(0, len(answer), chunk_size):
+        yield {"type": "chunk", "text": answer[i:i + chunk_size]}
+    yield {"type": "done", "source_count": len(result.get("sources", [])), "llm_error": ""}
+
+
 def keyword_search(question: str) -> list[dict]:
     """
     纯关键词检索（embedding 挂了时的兜底方案）

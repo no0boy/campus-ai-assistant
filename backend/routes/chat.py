@@ -11,6 +11,7 @@ import json
 from routes.auth import get_current_user
 from database import get_db, User, Conversation, UsageLog, Document
 from services.rag_service import ask, ask_stream, ask_with_agent, ask_stream_with_agent
+from services.rag_service import agent_ask, agent_ask_stream
 from services.token_tracker import hash_question, count_tokens
 import config as _cfg
 from sqlalchemy.orm import Session
@@ -184,6 +185,55 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
             "conversation_id": conv.conversation_id
         }
     }
+
+
+@router.post("/agent")
+def chat_agent(req: AskRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Agent Think-Act 模式（非流式）"""
+    result = agent_ask(req.question, None)
+    conv = Conversation(
+        user_id=user.id,
+        conversation_id=req.conversation_id or f"agent_{user.id}_{hash(req.question)}",
+        question=req.question,
+        answer=result["answer"],
+        sources=result.get("sources", [])
+    )
+    db.add(conv)
+    db.commit()
+    return {"code": 0, "data": {
+        "answer": result["answer"],
+        "sources": [{"title": s["title"], "content": s["content"][:300]} for s in result.get("sources", [])],
+        "search_method": result.get("search_method", "agent"),
+        "rounds": result.get("usage", {}).get("rounds", 0),
+    }}
+
+
+@router.post("/agent/stream")
+def chat_agent_stream(req: AskRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Agent Think-Act 模式（流式）"""
+    def generate():
+        full_answer = ""
+        sources = []
+        search_method = "agent"
+        for chunk in agent_ask_stream(req.question, None):
+            kind = chunk.get("type")
+            if kind == "meta":
+                sources = chunk.get("sources", [])
+                search_method = chunk.get("search_method", "agent")
+                yield f"data: {json.dumps({'type':'meta','sources':len(sources),'search_method':search_method}, ensure_ascii=False)}\n\n"
+            elif kind == "chunk":
+                full_answer += chunk.get("text", "")
+                yield f"data: {json.dumps({'type':'chunk','text':chunk.get('text','')}, ensure_ascii=False)}\n\n"
+            elif kind == "done":
+                conv = Conversation(
+                    user_id=user.id,
+                    conversation_id=req.conversation_id or f"agent_{user.id}_{hash(req.question)}",
+                    question=req.question, answer=full_answer, sources=sources
+                )
+                db.add(conv); db.commit()
+                yield f"data: {json.dumps({'type':'done','conversation_id':conv.conversation_id,'sources':[{'title':s['title'],'content':s['content'][:300]} for s in sources],'search_method':search_method}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.get("/history")
