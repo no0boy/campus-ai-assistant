@@ -112,11 +112,14 @@ async function apiChatAsk(question, conversationId = null, stream = true, onChun
           try {
             const payload = JSON.parse(line.slice(6))
 
-            if (payload.type === 'chunk') {
+            if (payload.type === 'agent') {
+              finalData = finalData || {}
+              finalData.agent = { name: payload.name, emoji: payload.emoji }
+            } else if (payload.type === 'chunk') {
               fullAnswer += payload.text
               onChunk(payload.text, fullAnswer)
             } else if (payload.type === 'done') {
-              finalData = payload
+              finalData = { ...finalData, ...payload }
             }
           } catch (e) {
             const text = line.slice(6)

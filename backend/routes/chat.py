@@ -10,7 +10,7 @@ import json
 
 from routes.auth import get_current_user
 from database import get_db, User, Conversation, UsageLog
-from services.rag_service import ask, ask_stream
+from services.rag_service import ask, ask_stream, ask_with_agent, ask_stream_with_agent
 from services.token_tracker import hash_question
 from sqlalchemy.orm import Session
 
@@ -46,10 +46,14 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
             search_method = "vector"
             llm_available = True
 
-            for chunk in ask_stream(req.question, history):
+            for chunk in ask_stream_with_agent(req.question, history):
                 kind = chunk.get("type")
 
-                if kind == "meta":
+                if kind == "agent":
+                    agent_info = {"name": chunk.get("name", ""), "emoji": chunk.get("emoji", "🤖")}
+                    yield f"data: {json.dumps({'type':'agent','name':agent_info['name'],'emoji':agent_info['emoji']}, ensure_ascii=False)}\n\n"
+
+                elif kind == "meta":
                     sources = chunk.get("sources", [])
                     search_method = chunk.get("search_method", "vector")
                     yield f"data: {json.dumps({'type':'meta','sources':len(sources),'search_method':search_method}, ensure_ascii=False)}\n\n"
@@ -97,12 +101,20 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
                     db.add(usage_log)
                     db.commit()
 
-                    yield f"data: {json.dumps({'type':'done','conversation_id':conv.conversation_id,'sources':[{'title':s['title'],'content':s['content'][:300],'score':s.get('score',0)} for s in sources],'search_method':search_method,'llm_available':llm_available}, ensure_ascii=False)}\n\n"
+                    done_data = {
+                        'type':'done',
+                        'conversation_id':conv.conversation_id,
+                        'sources':[{'title':s['title'],'content':s['content'][:300],'score':s.get('score',0)} for s in sources],
+                        'search_method':search_method,
+                        'llm_available':llm_available,
+                        'agent': chunk.get('agent', {}),
+                    }
+                    yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
-    # 普通模式
-    result = ask(req.question, history)
+    # 普通模式（Agent 路由）
+    result = ask_with_agent(req.question, history)
     conv = Conversation(
         user_id=user.id,
         conversation_id=req.conversation_id or f"conv_{user.id}_{hash(req.question)}",

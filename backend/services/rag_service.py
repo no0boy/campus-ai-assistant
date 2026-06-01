@@ -494,6 +494,76 @@ def _optimize_sources(sources: list[dict]) -> list[dict]:
     return optimized
 
 
+# ==================== Agent 路由 ====================
+
+def classify_intent(question: str) -> dict:
+    """
+    根据问题关键词匹配最合适的 Agent
+    返回: {name, emoji, prompt, doc_prefix}
+    """
+    q = question.lower()
+
+    # 精确匹配关键词
+    best_agent = None
+    best_score = 0
+    for name, cfg in config.AGENTS.items():
+        score = sum(1 for kw in cfg.get("keywords", []) if kw in q)
+        if score > best_score:
+            best_score = score
+            best_agent = {"name": name, **cfg}
+
+    # 没匹配到用总助手
+    if not best_agent or best_score == 0:
+        cfg = config.AGENTS["校园总助手"]
+        return {"name": "校园总助手", **cfg}
+
+    return best_agent
+
+
+def ask_with_agent(question: str, conversation_history: list[dict] = None) -> dict:
+    """
+    Agent 路由版问答：
+    1. 意图分类 → 匹配 Agent
+    2. 用 Agent 专属 Prompt 调 RAG 生成
+    """
+    agent = classify_intent(question)
+
+    # 临时替换 system prompt 为 Agent 专属
+    global current_system_prompt
+    saved_prompt = current_system_prompt
+    current_system_prompt = agent["prompt"]
+    try:
+        result = ask(question, conversation_history)
+    finally:
+        current_system_prompt = saved_prompt  # 恢复
+
+    # 标记来源 Agent
+    result["agent"] = {"name": agent["name"], "emoji": agent["emoji"]}
+    return result
+
+
+def ask_stream_with_agent(question: str, conversation_history: list[dict] = None):
+    """
+    Agent 路由版流式问答
+    截获 ask_stream 的 done 事件，注入 agent 信息
+    """
+    agent = classify_intent(question)
+
+    # 先发 agent 信息
+    yield {"type": "agent", "name": agent["name"], "emoji": agent["emoji"]}
+
+    global current_system_prompt
+    saved_prompt = current_system_prompt
+    current_system_prompt = agent["prompt"]
+    try:
+        for event in ask_stream(question, conversation_history):
+            if event["type"] == "done":
+                event["agent"] = {"name": agent["name"], "emoji": agent["emoji"]}
+            yield event
+    finally:
+        current_system_prompt = saved_prompt
+
+
 def keyword_search(question: str) -> list[dict]:
     """
     纯关键词检索（embedding 挂了时的兜底方案）

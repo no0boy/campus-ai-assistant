@@ -220,10 +220,11 @@ async function sendMessage() {
       searchMethod = d.search_method || '语义向量'
       llmAvailable = d.llm_available !== false
 
+      const agentName = (d.agent && d.agent.name) ? (d.agent.emoji || '') + ' ' + d.agent.name : ''
       const sourceCount = sources.length
-      let statusLine = sourceCount > 0
+      let statusLine = (agentName ? agentName + ' · ' : '') + (sourceCount > 0
         ? sourceCount + '条相关内容（' + searchMethod + '检索）' + (llmAvailable ? '  AI已生成回答' : '  已返回原始内容')
-        : '知识库无匹配内容，AI直接回答'
+        : '知识库无匹配内容，AI直接回答')
       if (res.aborted) {
         statusLine += ' [已停止]'
         fullAnswer = (fullAnswer || d.answer || '') + '\n\n*[已停止生成]*'
