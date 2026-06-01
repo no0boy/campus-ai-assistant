@@ -163,21 +163,21 @@
       <!-- 错误提示 -->
       <div class="error-msg" id="errorMsg"></div>
 
-      <!-- 表单（隐藏，quickLogin 自动填充） -->
-      <form id="loginForm" style="display:none;">
-        <input type="text" id="username" value="">
-        <input type="password" id="password" value="">
+      <!-- 按钮（表单在下方隐藏） -->
+      <button type="button" class="btn btn-primary login-btn"
+              onclick="quickLogin('student','123456')"
+              style="font-size:16px;padding:13px;">
+        🚀 学生体验
+      </button>
+      <button type="button" class="btn btn-outline login-btn"
+              onclick="quickLogin('admin','admin123')"
+              style="margin-top:8px;font-size:16px;padding:13px;">
+        🔧 管理后台
+      </button>
 
-        <button type="button" class="btn btn-primary login-btn"
-                onclick="quickLogin('student','123456')"
-                style="font-size:16px;padding:13px;">
-          🚀 学生体验
-        </button>
-        <button type="button" class="btn btn-outline login-btn"
-                onclick="quickLogin('admin','admin123')"
-                style="margin-top:8px;font-size:16px;padding:13px;">
-          🔧 管理后台
-        </button>
+      <form id="loginForm" style="display:none;">
+        <input type="text" id="username">
+        <input type="password" id="password">
       </form>
     </div>
   </div>
