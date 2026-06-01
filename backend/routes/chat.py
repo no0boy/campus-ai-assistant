@@ -9,7 +9,7 @@ from typing import Optional
 import json
 
 from routes.auth import get_current_user
-from database import get_db, User, Conversation, UsageLog
+from database import get_db, User, Conversation, UsageLog, Document
 from services.rag_service import ask, ask_stream, ask_with_agent, ask_stream_with_agent
 from services.token_tracker import hash_question
 from sqlalchemy.orm import Session
@@ -101,6 +101,15 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
                     db.add(usage_log)
                     db.commit()
 
+                    # 累加文档引用计数
+                    for s in sources:
+                        doc_title = s.get("title", "")
+                        if doc_title:
+                            doc = db.query(Document).filter(Document.title == doc_title).first()
+                            if doc:
+                                doc.access_count = (doc.access_count or 0) + 1
+                    db.commit()
+
                     done_data = {
                         'type':'done',
                         'conversation_id':conv.conversation_id,
@@ -145,6 +154,15 @@ def chat_ask(req: AskRequest, user: User = Depends(get_current_user), db: Sessio
         error_msg=result.get("error_msg", ""),
     )
     db.add(usage_log)
+    db.commit()
+
+    # 累加文档引用计数
+    for s in result.get("sources", []):
+        doc_title = s.get("title", "")
+        if doc_title:
+            doc = db.query(Document).filter(Document.title == doc_title).first()
+            if doc:
+                doc.access_count = (doc.access_count or 0) + 1
     db.commit()
 
     return {

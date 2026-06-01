@@ -33,47 +33,82 @@
     }
     .admin-body { padding: 24px; }
 
+    /* 搜索 + 批量工具栏 */
+    .toolbar {
+      display: flex; gap: 12px; margin-bottom: 16px; align-items: center;
+    }
+    .search-box {
+      flex: 1; max-width: 360px; padding: 8px 14px;
+      border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px;
+    }
+    .btn-sm {
+      padding: 6px 14px; font-size: 12px; border-radius: 6px;
+      border: 1px solid #e2e8f0; background: #fff; color: #64748b;
+      cursor: pointer;
+    }
+    .btn-sm:hover { background: #f1f5f9; }
+    .btn-sm.danger { color: #dc2626; border-color: #fecaca; background: #fee2e2; }
+    .btn-sm.danger:hover { background: #fecaca; }
+    .btn-sm.primary { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+
     /* 上传区域 */
     .upload-zone {
       background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px;
-      padding: 40px; text-align: center; margin-bottom: 24px;
+      padding: 32px; text-align: center; margin-bottom: 20px;
       cursor: pointer; transition: all 0.2s;
     }
     .upload-zone:hover { border-color: #3b82f6; background: #f8fafc; }
-    .upload-zone .icon { font-size: 40px; margin-bottom: 8px; }
+    .upload-zone .icon { font-size: 36px; margin-bottom: 6px; }
     .upload-zone p { color: #94a3b8; font-size: 14px; }
     .upload-zone .hint { font-size: 12px; color: #cbd5e1; margin-top: 4px; }
     .upload-zone input[type="file"] { display: none; }
 
-    /* 文档列表 */
-    .doc-list { display: flex; flex-direction: column; gap: 8px; }
-    .doc-item {
-      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-      padding: 16px 20px; display: flex; align-items: center; gap: 16px;
+    /* 表格 */
+    .doc-table { width: 100%; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; }
+    .doc-table th, .doc-table td {
+      text-align: left; padding: 12px 16px; font-size: 13px;
     }
-    .doc-icon {
-      width: 44px; height: 44px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; flex-shrink: 0;
+    .doc-table th {
+      background: #f8fafc; color: #64748b; font-weight: 500;
+      border-bottom: 1px solid #e2e8f0; font-size: 12px;
     }
-    .doc-icon.pdf { background: #fef2f2; }
-    .doc-icon.txt { background: #f0fdf4; }
-    .doc-info { flex: 1; min-width: 0; }
-    .doc-info .name { font-size: 14px; font-weight: 500; color: #1e293b; }
-    .doc-info .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-    .doc-status {
-      font-size: 12px; padding: 4px 12px; border-radius: 20px;
-      font-weight: 500;
-    }
-    .doc-status.ready { background: #f0fdf4; color: #16a34a; }
-    .doc-status.processing { background: #fefce8; color: #ca8a04; }
-    .btn-danger { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
-    .btn-danger:hover { background: #fecaca; }
+    .doc-table td { border-bottom: 1px solid #f1f5f9; color: #334155; }
+    .doc-table tr:hover td { background: #f8fafc; }
+    .doc-table .cb { width: 36px; }
 
-    /* 响应式 */
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
+    }
+    .badge-green { background: #f0fdf4; color: #16a34a; }
+    .badge-blue { background: #eff6ff; color: #2563eb; }
+    .badge-amber { background: #fefce8; color: #ca8a04; }
+
+    /* 预览弹窗 */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 999; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; width: 90%; max-width: 700px;
+      max-height: 80vh; display: flex; flex-direction: column;
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+      font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-close { cursor: pointer; font-size: 20px; color: #94a3b8; background: none; border: none; }
+    .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+    .chunk-card {
+      padding: 10px 14px; background: #f8fafc; border-radius: 8px;
+      margin-bottom: 8px; font-size: 12px; color: #475569; line-height: 1.6;
+    }
+    .chunk-card .chunk-idx { font-weight: 600; color: #2563eb; margin-bottom: 4px; }
+
     @media (max-width: 768px) {
       .admin-nav { width: 60px; }
       .admin-nav .brand span, .nav-item span { display: none; }
+      .toolbar { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -105,157 +140,248 @@
         <div class="icon">📤</div>
         <p>点击上传校园文档（PDF / TXT）</p>
         <div class="hint">支持：学生手册、选课指南、奖助学金说明、军训手册等</div>
-        <input type="file" id="fileInput" accept=".pdf,.txt"
-               onchange="uploadDocument()" multiple>
+        <input type="file" id="fileInput" accept=".pdf,.txt" onchange="uploadDocument()" multiple>
       </div>
 
-      <!-- 上传进度 -->
-      <div id="uploadProgress" style="display:none;margin-bottom:16px;padding:12px 16px;background:#eff6ff;border-radius:8px;font-size:13px;color:#2563eb;">
-        正在上传并解析文档...
+      <div id="uploadProgress" style="display:none;margin-bottom:14px;padding:10px 16px;background:#eff6ff;border-radius:8px;font-size:13px;color:#2563eb;"></div>
+
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <input type="text" class="search-box" id="searchInput" placeholder="🔍 搜索文档名称..." oninput="loadDocuments()">
+        <button class="btn-sm primary" onclick="batchDelete()" id="batchDelBtn" disabled>🗑️ 批量删除</button>
+        <button class="btn-sm" onclick="loadDocuments()">🔄 刷新</button>
       </div>
 
-      <!-- 文档列表 -->
-      <div class="doc-list" id="docList">
-        <div style="text-align:center;padding:40px;color:#94a3b8;">
-          暂无文档，上传校园知识文档开始构建知识库
-        </div>
+      <!-- 文档表格 -->
+      <div class="doc-table">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th class="cb"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="全选"></th>
+              <th>文档名称</th>
+              <th style="width:80px;">类型</th>
+              <th style="width:80px;">切片数</th>
+              <th style="width:80px;">被引用</th>
+              <th style="width:140px;">上传时间</th>
+              <th style="width:140px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="docTableBody">
+            <tr><td colspan="7" style="text-align:center;padding:40px;color:#94a3b8;">加载中...</td></tr>
+          </tbody>
+        </table>
       </div>
 
     </div>
   </main>
 </div>
 
+<!-- 预览弹窗 -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="previewTitle">文档预览</span>
+      <button class="modal-close" onclick="closePreview()">&times;</button>
+    </div>
+    <div class="modal-body" id="previewBody"></div>
+  </div>
+</div>
+
 <script src="../student/js/api.js?v=2"></script>
 <script>
-  if (!localStorage.getItem('token')) {
-    window.location.href = 'login.html'
-  }
+  if (!localStorage.getItem('token')) { window.location.href = 'login.html' }
 
-  // ========== 加载文档列表 ==========
+  let selectedIds = new Set();
+
   async function loadDocuments() {
-    const el = document.getElementById('docList')
-    el.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">加载中...</div>'
+    const tbody = document.getElementById('docTableBody');
+    const search = document.getElementById('searchInput').value.trim();
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#94a3b8;">加载中...</td></tr>';
+    selectedIds.clear();
+    updateSelectAll();
 
     try {
-      const res = await apiGetDocuments()
-      if (res.code === 0 && res.data && res.data.length > 0) {
-        document.getElementById('docCount').textContent = `共 ${res.data.length} 份文档`
-        el.innerHTML = res.data.map(doc => {
-          const isPDF = (doc.file_type || '').toLowerCase() === 'pdf'
+      const url = search ? `/api/documents?search=${encodeURIComponent(search)}` : '/api/documents';
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const data = await res.json();
+
+      if (data.code === 0 && data.data && data.data.length > 0) {
+        document.getElementById('docCount').textContent = `共 ${data.data.length} 份文档`;
+        tbody.innerHTML = data.data.map(doc => {
+          const isPDF = (doc.file_type || '').toLowerCase() === 'pdf';
+          const created = (doc.created_at || '').slice(0, 10);
           return `
-            <div class="doc-item">
-              <div class="doc-icon ${isPDF ? 'pdf' : 'txt'}">
-                ${isPDF ? '📕' : '📄'}
-              </div>
-              <div class="doc-info">
-                <div class="name">${escapeHtml(doc.title)}</div>
-                <div class="meta">
-                  ${doc.file_type || '未知'} ·
-                  切片数：${doc.chunk_count || 0} ·
-                  上传时间：${doc.created_at || '-'}
-                </div>
-              </div>
-              <span class="doc-status ready">✅ 已就绪</span>
-              <button class="btn btn-danger btn-sm" onclick="deleteDoc('${doc.id}')">🗑️ 删除</button>
-            </div>
-          `
-        }).join('')
+            <tr>
+              <td class="cb"><input type="checkbox" value="${doc.id}" onchange="toggleSelect(event, ${doc.id})"></td>
+              <td>
+                <span style="font-weight:500;">${isPDF ? '📕' : '📄'} ${escapeHtml(doc.title)}</span>
+              </td>
+              <td><span class="badge ${isPDF ? 'badge-amber' : 'badge-green'}">${doc.file_type || '-'}</span></td>
+              <td>${doc.chunk_count || 0}</td>
+              <td><span class="badge badge-blue">${doc.access_count || 0} 次</span></td>
+              <td style="font-size:12px;color:#94a3b8;">${created}</td>
+              <td>
+                <button class="btn-sm" onclick="previewDoc(${doc.id}, '${escapeHtml(doc.title)}')">👁️ 预览</button>
+                <button class="btn-sm danger" onclick="deleteDoc(${doc.id})">🗑️</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
       } else {
-        document.getElementById('docCount').textContent = '共 0 份文档'
-        el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">暂无文档，上传校园知识文档开始构建知识库</div>'
+        document.getElementById('docCount').textContent = '共 0 份文档';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#94a3b8;">暂无文档</td></tr>';
       }
     } catch (e) {
-      el.innerHTML = '<div style="text-align:center;padding:20px;color:#dc2626;">⚠️ 加载失败，请检查后端服务</div>'
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#dc2626;">⚠️ 加载失败</td></tr>';
     }
   }
 
-  loadDocuments()
+  loadDocuments();
 
-  // ========== 上传文档 ==========
+  function toggleSelectAll() {
+    const all = document.getElementById('selectAll').checked;
+    document.querySelectorAll('#docTableBody input[type="checkbox"]').forEach(cb => {
+      cb.checked = all;
+      if (all) selectedIds.add(parseInt(cb.value));
+      else selectedIds.delete(parseInt(cb.value));
+    });
+    updateBatchBtn();
+  }
+
+  function toggleSelect(e, id) {
+    if (e.target.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateSelectAll();
+    updateBatchBtn();
+  }
+
+  function updateSelectAll() {
+    const cbs = document.querySelectorAll('#docTableBody input[type="checkbox"]');
+    document.getElementById('selectAll').checked = cbs.length > 0 && Array.from(cbs).every(c => c.checked);
+    document.getElementById('selectAll').indeterminate = cbs.length > 0 && !document.getElementById('selectAll').checked && Array.from(cbs).some(c => c.checked);
+  }
+
+  function updateBatchBtn() {
+    document.getElementById('batchDelBtn').disabled = selectedIds.size === 0;
+    document.getElementById('batchDelBtn').textContent = selectedIds.size > 0 ? `🗑️ 批量删除(${selectedIds.size})` : '🗑️ 批量删除';
+  }
+
+  async function batchDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 篇文档？向量数据将同步移除。`)) return;
+
+    try {
+      const res = await fetch('/api/documents/batch-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ ids: Array.from(selectedIds) })
+      });
+      const data = await res.json();
+      alert(data.message || '操作完成');
+      loadDocuments();
+    } catch (e) {
+      alert('网络异常');
+    }
+  }
+
+  async function previewDoc(id, title) {
+    document.getElementById('previewTitle').textContent = '📄 ' + title;
+    document.getElementById('previewBody').innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
+    document.getElementById('previewModal').classList.add('show');
+
+    try {
+      const res = await fetch(`/api/documents/${id}/chunks`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      if (data.code === 0 && data.data.chunks.length > 0) {
+        document.getElementById('previewBody').innerHTML = data.data.chunks.map(c => `
+          <div class="chunk-card">
+            <div class="chunk-idx">片段 #${c.index + 1}</div>
+            <div>${escapeHtml(c.content)}</div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('previewBody').innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">暂无切片数据</div>';
+      }
+    } catch (e) {
+      document.getElementById('previewBody').innerHTML = '<div style="text-align:center;padding:20px;color:#dc2626;">加载失败</div>';
+    }
+  }
+
+  function closePreview() {
+    document.getElementById('previewModal').classList.remove('show');
+  }
+
+  document.getElementById('previewModal').addEventListener('click', function(e) {
+    if (e.target === this) closePreview();
+  });
+
   async function uploadDocument() {
-    const fileInput = document.getElementById('fileInput')
-    const files = fileInput.files
-    if (!files.length) return
+    const fileInput = document.getElementById('fileInput');
+    const files = fileInput.files;
+    if (!files.length) return;
 
-    const progressEl = document.getElementById('uploadProgress')
+    const progressEl = document.getElementById('uploadProgress');
 
     for (const file of files) {
-      progressEl.style.display = 'block'
-      progressEl.textContent = `正在上传并解析：${file.name}...`
+      progressEl.style.display = 'block';
+      progressEl.textContent = `正在上传并解析：${file.name}...`;
 
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-
+        const formData = new FormData();
+        formData.append('file', file);
         const res = await fetch('/api/documents/upload', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           body: formData
-        })
-        const data = await res.json()
-
+        });
+        const data = await res.json();
         if (data.code === 0) {
-          progressEl.textContent = `✅ ${file.name} 上传成功！已自动切片并向量化`
-          progressEl.style.background = '#f0fdf4'
-          progressEl.style.color = '#16a34a'
+          progressEl.textContent = `✅ ${file.name} 上传成功！已自动切片并向量化`;
+          progressEl.style.background = '#f0fdf4'; progressEl.style.color = '#16a34a';
         } else {
-          progressEl.textContent = `❌ ${file.name} 上传失败：${data.message || '未知错误'}`
-          progressEl.style.background = '#fef2f2'
-          progressEl.style.color = '#dc2626'
+          progressEl.textContent = `❌ ${data.message || '上传失败'}`;
+          progressEl.style.background = '#fef2f2'; progressEl.style.color = '#dc2626';
         }
       } catch (e) {
-        progressEl.textContent = `❌ ${file.name} 上传失败：网络异常`
-        progressEl.style.background = '#fef2f2'
-        progressEl.style.color = '#dc2626'
+        progressEl.textContent = `❌ ${file.name} 网络异常`;
+        progressEl.style.background = '#fef2f2'; progressEl.style.color = '#dc2626';
       }
     }
 
-    // 重置文件选择器
-    fileInput.value = ''
-
-    // 重新加载列表
+    fileInput.value = '';
     setTimeout(() => {
-      progressEl.style.display = 'none'
-      progressEl.style.background = '#eff6ff'
-      progressEl.style.color = '#2563eb'
-      loadDocuments()
-    }, 2000)
+      progressEl.style.display = 'none';
+      progressEl.style.background = '#eff6ff'; progressEl.style.color = '#2563eb';
+      loadDocuments();
+    }, 1500);
   }
 
-  // ========== 删除文档 ==========
   async function deleteDoc(id) {
-    if (!confirm('确定要删除这个文档吗？知识库中的向量数据也会被移除。')) return
-
+    if (!confirm('确定删除？')) return;
     try {
       const res = await fetch(`/api/documents/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      })
-      const data = await res.json()
-
-      if (data.code === 0) {
-        alert('删除成功')
-        loadDocuments()
-      } else {
-        alert('删除失败：' + (data.message || '未知错误'))
-      }
-    } catch (e) {
-      alert('网络异常，请检查后端服务')
-    }
+      });
+      const data = await res.json();
+      if (data.code === 0) { loadDocuments(); } else { alert(data.message); }
+    } catch (e) { alert('网络异常'); }
   }
 
   function escapeHtml(str) {
-    const div = document.createElement('div')
-    div.textContent = str
-    return div.innerHTML
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   function logout() {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    window.location.href = 'login.html'
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    window.location.href = 'login.html';
   }
 </script>
 </body>

@@ -50,6 +50,7 @@ class Document(Base):
     file_path = Column(String(512), nullable=False)
     file_type = Column(String(16), nullable=False)
     chunk_count = Column(Integer, default=0)
+    access_count = Column(Integer, default=0)      # 被 RAG 检索命中的总次数
     uploader_id = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
