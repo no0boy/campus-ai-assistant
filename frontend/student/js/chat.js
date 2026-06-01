@@ -212,7 +212,15 @@ async function sendMessage() {
       fullAnswer = answer
       updateAIMessage(aiMsg, fullAnswer, false)
       scrollToBottom()
-    }, currentAbortController.signal)
+    }, currentAbortController.signal, (agentName, agentEmoji) => {
+      // 立即更新 AI 消息角色标签，显示是哪个 Agent 在回答
+      const roleEl = aiMsg.querySelector('.msg-role')
+      if (roleEl) {
+        roleEl.innerHTML = agentEmoji + ' <strong>' + agentName + '</strong>'
+        roleEl.style.color = 'var(--primary)'
+      }
+      updateAIStatus(aiMsg, '检索知识库中...')
+    })
 
     if (res && res.code === 0) {
       const d = res.data || res

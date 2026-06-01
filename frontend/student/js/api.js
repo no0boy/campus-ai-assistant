@@ -73,7 +73,7 @@ function apiRegister(username, password) {
  * @param {boolean} stream         - 是否流式输出
  * @param {function} onChunk       - 流式回调：每次收到文字块时调用
  */
-async function apiChatAsk(question, conversationId = null, stream = true, onChunk = null, abortSignal = null) {
+async function apiChatAsk(question, conversationId = null, stream = true, onChunk = null, abortSignal = null, onAgent = null) {
   // 流式请求
   if (stream && onChunk) {
     const token = localStorage.getItem('token')
@@ -115,6 +115,9 @@ async function apiChatAsk(question, conversationId = null, stream = true, onChun
             if (payload.type === 'agent') {
               finalData = finalData || {}
               finalData.agent = { name: payload.name, emoji: payload.emoji }
+              if (typeof onAgent === 'function') {
+                onAgent(payload.name, payload.emoji)
+              }
             } else if (payload.type === 'chunk') {
               fullAnswer += payload.text
               onChunk(payload.text, fullAnswer)
