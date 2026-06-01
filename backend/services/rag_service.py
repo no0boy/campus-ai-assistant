@@ -662,6 +662,13 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
     search_method = "agent"
     sources_all = []
 
+    # LLM 不可用时直接降级
+    if not llm:
+        from services.rag_service import ask
+        result = ask(question, conversation_history)
+        result["search_method"] = "agent-fallback"
+        return result
+
     for round_num in range(max_rounds):
         # ====== Think: LLM 决定下一步 ======
         ctx_text = "\n".join(context_parts) if context_parts else "（尚未检索）"

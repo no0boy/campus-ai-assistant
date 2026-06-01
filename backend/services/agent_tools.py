@@ -16,10 +16,10 @@ def get_weather(city: str = "广州") -> str:
         city_enc = urllib.parse.quote(city)
         url = f"https://wttr.in/{city_enc}?format=%C+%t+%h+%w&lang=zh"
         req = urllib.request.Request(url, headers={"User-Agent": "curl"})
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=3)
         return f"{city}天气：{resp.read().decode().strip()}"
-    except Exception as e:
-        return f"天气查询失败：{e}"
+    except Exception:
+        return f"{city}天气：查询超时，建议稍后重试"
 
 
 def search_web(query: str) -> str:
@@ -31,7 +31,7 @@ def search_web(query: str) -> str:
         q = urllib.parse.quote(query)
         url = f"https://html.duckduckgo.com/html/?q={q}"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        resp = urllib.request.urlopen(req, timeout=8)
+        resp = urllib.request.urlopen(req, timeout=4)
         html = resp.read().decode()
 
         # 简单解析搜索结果
