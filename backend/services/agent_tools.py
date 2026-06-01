@@ -42,30 +42,34 @@ def get_weather(city: str = "广州") -> str:
         return f"{city}天气：查询超时"
 
 
+import os as _os
+TAVILY_API_KEY = _os.getenv("TAVILY_API_KEY", "")
+
 def search_web(query: str) -> str:
     """
-    网页搜索 — DuckDuckGo HTML 版，免费无 Key
-    返回前几条结果摘要
+    网页搜索 — Tavily Search API（专为 AI Agent 设计）
     """
     try:
-        q = urllib.parse.quote(query)
-        url = f"https://html.duckduckgo.com/html/?q={q}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        resp = urllib.request.urlopen(req, timeout=4)
-        html = resp.read().decode()
+        data = json.dumps({
+            "query": query,
+            "search_depth": "basic",
+            "max_results": 3,
+            "include_answer": True
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.tavily.com/search",
+            data=data,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {TAVILY_API_KEY}"}
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        result = json.loads(resp.read().decode())
 
-        # 简单解析搜索结果
-        results = []
-        import re
-        snippets = re.findall(r'class="result__snippet">(.*?)</a>', html, re.DOTALL)
-        for i, s in enumerate(snippets[:3]):
-            text = re.sub(r'<[^>]+>', '', s).strip()[:200]
-            if text:
-                results.append(f"{i + 1}. {text}")
-
-        if results:
-            return "搜索结果：\n" + "\n".join(results)
-        return f"未找到「{query}」的搜索结果"
+        parts = []
+        if result.get("answer"):
+            parts.append("摘要：" + result["answer"])
+        for i, r in enumerate(result.get("results", [])[:3]):
+            parts.append(f"{i + 1}. {r.get('title','')}：{r.get('content','')[:200]}")
+        return "\n".join(parts) if parts else f"未找到「{query}」的结果"
     except Exception as e:
         return f"搜索失败：{e}"
 
