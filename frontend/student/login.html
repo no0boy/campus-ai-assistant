@@ -238,21 +238,15 @@
         return
       }
 
-      // 按钮 loading 状态
-      submitBtn.disabled = true
-      submitBtn.textContent = '登录中...'
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '登录中...' }
       errorMsg.style.display = 'none'
 
       try {
-        console.log('[DEBUG] sending login...', { username, url: '/api/auth/login' })
         const res = await apiLogin(username, password)
-        console.log('[DEBUG] response:', res)
 
         if (res.code === 0) {
-          // 登录成功 — 保存 token 和用户信息
           localStorage.setItem('token', res.data.token)
           localStorage.setItem('user', JSON.stringify(res.data.user))
-          // 按角色自动跳转
           const role = res.data.user.role
           if (role === 'admin') {
             window.location.href = '../admin/index.html'
@@ -265,8 +259,7 @@
       } catch (err) {
         showError('网络异常，请检查后端服务是否启动')
       } finally {
-        submitBtn.disabled = false
-        submitBtn.textContent = '登 录'
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登 录' }
       }
     })
 
