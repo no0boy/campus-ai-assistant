@@ -499,36 +499,31 @@ def _optimize_sources(sources: list[dict]) -> list[dict]:
 # 模糊/需要追问的关键词
 VAGUE_PATTERNS = ["那个", "这个", "它", "怎么办", "怎么样", "好不好", "行不行", "能不能", "是什么", "什么意思"]
 
-FOLLOWUP_PROMPT = """用户问了一个比较模糊的问题。请用友好的语气追问一句，帮用户澄清意图。
+FOLLOWUP_PROMPT = """你是校园助手。用户问了一个知识库中找不到精确匹配的问题。
 
 用户问题：{question}
 
-可能的意图方向：{context}
+知识库中已有的文档主题：奖学金评定、宿舍管理、社团管理、选课指南、学生手册（学籍/考勤/考试/处分）
 
-请用一个简洁的追问（不超过30字）："""
+请基于你的常识，生成一个友好的追问来澄清用户意图（不超过30字）："""
 
 
 def should_follow_up(question: str, sources: list[dict]) -> bool:
     """判断是否需要 AI 追问"""
-    # 太短
     if len(question.strip()) < 6:
         return True
-    # 无检索结果
     if not sources:
         return True
-    # 所有结果低相似度
     if all(s.get("score", 0) < 0.5 for s in sources):
         return True
-    # 模糊关键词
     if any(kw in question for kw in VAGUE_PATTERNS):
         return True
     return False
 
 
 def generate_followup(question: str, sources: list[dict]) -> str:
-    """生成追问"""
-    context = "、".join([s.get("title", "") for s in sources[:3]]) if sources else "知识库中的各类校园信息"
-    fp = FOLLOWUP_PROMPT.format(question=question, context=context)
+    """生成追问——用 LLM 常识，不依赖检索结果标题"""
+    fp = FOLLOWUP_PROMPT.format(question=question)
 
     try:
         fu_llm = ChatOpenAI(
@@ -541,11 +536,7 @@ def generate_followup(question: str, sources: list[dict]) -> str:
         resp = fu_llm.invoke([HumanMessage(content=fp)])
         return "🤔 " + resp.content.strip()
     except Exception:
-        # 降级追问
-        if sources:
-            titles = "、".join([s.get("title", "") for s in sources[:2]])
-            return f"🤔 这个问题涉及的内容比较多，你想了解「{titles}」哪方面的信息呢？"
-        return "🤔 不太确定你想了解什么，能再说具体一点吗？比如你想问校园的哪个方面？"
+        return "🤔 不太确定你想了解什么，能再说具体一点吗？"
 
 
 # ==================== Agent 路由 ====================
@@ -723,7 +714,8 @@ def ask(question: str, conversation_history: list[dict] = None) -> dict:
     sources = _optimize_sources(sources)
 
     # ====== 追问检测 ======
-    if should_follow_up(question, sources):
+    max_score = max([s.get("score", 0) for s in sources]) if sources else 0
+    if should_follow_up(question, sources) and max_score < 0.6:
         followup = generate_followup(question, sources)
         tracker.count_completion(followup)
         return {
@@ -878,8 +870,9 @@ def ask_stream(question: str, conversation_history: list[dict] = None):
     # ====== 3. 上下文优化 ======
     sources = _optimize_sources(sources)
 
-    # ====== 追问检测（流式）======
-    if should_follow_up(question, sources):
+    # ====== 追问检测：低质量检索结果时生成追问 ======
+    max_score = max([s.get("score", 0) for s in sources]) if sources else 0
+    if should_follow_up(question, sources) and max_score < 0.6:
         followup = generate_followup(question, sources)
         tracker.count_completion(followup)
         yield {"type": "meta", "sources": sources, "search_method": search_method}
