@@ -8,18 +8,38 @@ import urllib.parse
 import json
 
 
+# 城市→经纬度映射（常用城市）
+CITY_COORDS = {
+    "北京": (39.90, 116.40), "上海": (31.23, 121.47), "广州": (23.13, 113.26),
+    "深圳": (22.54, 114.06), "杭州": (30.29, 120.15), "成都": (30.57, 104.07),
+    "武汉": (30.58, 114.30), "南京": (32.06, 118.80), "西安": (34.26, 108.94),
+    "重庆": (29.56, 106.55), "长沙": (28.23, 112.94), "郑州": (34.75, 113.63),
+    "济南": (36.65, 117.00), "天津": (39.13, 117.20), "厦门": (24.48, 118.09),
+    "东莞": (23.05, 113.75), "佛山": (23.03, 113.12), "珠海": (22.27, 113.58),
+}
+
+
 def get_weather(city: str = "广州") -> str:
     """
-    查询天气 — wttr.in 免费 API，无需 Key
+    查询天气 — open-meteo 免费 API，无需 Key，JSON 结构化返回
     """
+    coords = CITY_COORDS.get(city, (23.13, 113.26))  # 默认广州
     try:
-        city_enc = urllib.parse.quote(city)
-        url = f"https://wttr.in/{city_enc}?format=%C+%t+%h+%w&lang=zh"
-        req = urllib.request.Request(url, headers={"User-Agent": "curl"})
+        lat, lon = coords
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia/Shanghai"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         resp = urllib.request.urlopen(req, timeout=3)
-        return f"{city}天气：{resp.read().decode().strip()}"
+        data = json.loads(resp.read().decode())
+        cur = data.get("current", {})
+        temp = cur.get("temperature_2m", "?")
+        hum = cur.get("relative_humidity_2m", "?")
+        wind = cur.get("wind_speed_10m", "?")
+        code = cur.get("weather_code", 0)
+        weather_map = {0: "晴", 1: "少云", 2: "多云", 3: "阴", 45: "雾", 51: "小雨", 61: "中雨", 80: "阵雨"}
+        wx = weather_map.get(code, f"code{code}")
+        return f"{city}天气：{wx} · {temp}°C · 湿度{hum}% · 风速{wind}km/h"
     except Exception:
-        return f"{city}天气：查询超时，建议稍后重试"
+        return f"{city}天气：查询超时"
 
 
 def search_web(query: str) -> str:
