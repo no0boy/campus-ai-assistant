@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadConversations()
   loadTrending()
   checkWelcome()
+  loadRecommendations()
   autoResizeTextarea()
 })
 
@@ -157,7 +158,7 @@ async function saveProfile() {
     })
     if (allDone) {
       userProfile.profile_complete = 1
-      // 更新侧边栏
+      loadRecommendations()  // 画像完成后刷新推荐
       const nameEl = document.getElementById('sidebarName')
       if (nameEl) {
         const username = JSON.parse(localStorage.getItem('user') || '{}').username || '用户'
@@ -168,6 +169,31 @@ async function saveProfile() {
 }
 
 // ========== 对话管理 ==========
+
+/** 加载个性化推荐 */
+async function loadRecommendations() {
+  const el = document.getElementById('recList')
+  if (!el) return
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(BASE_URL + '/api/user/recommendations', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+    if (data.code === 0 && data.data.length > 0) {
+      document.getElementById('recBox').style.display = 'block'
+      el.innerHTML = data.data.map((r, i) => `
+        <div class="trending-item" onclick="sendQuick('${escapeHtml(r.question)}')" title="${escapeHtml(r.question)}">
+          ${i + 1}. ${escapeHtml(r.question)}
+        </div>
+      `).join('')
+    } else {
+      document.getElementById('recBox').style.display = 'none'
+    }
+  } catch(e) {
+    document.getElementById('recBox').style.display = 'none'
+  }
+}
 
 /** 加载热门推荐 */
 async function loadTrending() {

@@ -106,11 +106,66 @@ def get_welcome(user: User = Depends(get_current_user), db: Session = Depends(ge
     }
 
 
-@router.post("/parse-profile")
-def parse_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/recommendations")
+def get_recommendations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    从用户最近的输入中解析画像信息（年级、专业）
-    由前端调用，传入用户最新的一句话
+    个性化推荐：根据年级+专业+关注话题生成预测问题
     """
-    # 这里只做基础的关键词匹配，不调 LLM
-    return {"code": 0, "message": "ok"}
+    grade = user.grade or ""
+    major = user.major or ""
+    memory = user.memory_summary or ""
+
+    # ====== 基于年级的推荐 ======
+    grade_questions = {
+        "大一": ["军训时间安排", "宿舍管理规定", "选课流程是什么", "社团怎么加入", "校园一卡通怎么办理"],
+        "大二": ["奖学金怎么申请", "四级考试报名时间", "转专业需要什么条件", "勤工俭学怎么申请", "选修课推荐"],
+        "大三": ["实习机会怎么找", "毕业论文提交时间", "校园招聘在哪里", "考研自习室安排", "专业证书怎么考"],
+        "大四": ["毕业设计答辩时间", "论文格式要求", "三方协议怎么签", "档案转寄流程", "校友卡怎么办"],
+    }
+    default_questions = ["宿舍几点关门", "奖学金怎么申请", "图书馆开放时间", "选课流程", "考试安排"]
+
+    # ====== 基于专业的推荐 ======
+    major_questions = {
+        "软件": ["蓝桥杯竞赛报名", "ACM校队怎么进", "毕业设计选题指南", "Java/Python证书怎么考"],
+        "计算机": ["蓝桥杯竞赛报名", "ACM校队怎么进", "服务器实验室怎么申请", "云计算证书怎么考"],
+        "会计": ["初级会计证怎么考", "CPA报名条件", "会计师事务所实习"],
+        "英语": ["专四专八报名时间", "翻译资格证书", "英语竞赛通知"],
+    }
+
+    # ====== 基于记忆的追加推荐 ======
+    memory_questions = []
+    if "奖学金" in memory:
+        memory_questions.append("国家励志奖学金申请条件")
+        memory_questions.append("奖学金到账时间")
+    if "宿舍" in memory:
+        memory_questions.append("宿舍调换流程")
+    if "选课" in memory or "课程" in memory:
+        memory_questions.append("重修政策")
+        memory_questions.append("缓考怎么申请")
+
+    # ====== 组装推荐列表 ======
+    recommended = []
+    seen = set()
+
+    # 1. 年级相关
+    grade_qs = grade_questions.get(grade, default_questions)
+    for q in grade_qs:
+        if q not in seen and len(recommended) < 6:
+            recommended.append({"question": q, "source": "年级推荐"})
+            seen.add(q)
+
+    # 2. 专业相关
+    for k, qs in major_questions.items():
+        if k in (major or ""):
+            for q in qs:
+                if q not in seen and len(recommended) < 6:
+                    recommended.append({"question": q, "source": "专业推荐"})
+                    seen.add(q)
+
+    # 3. 记忆相关
+    for q in memory_questions:
+        if q not in seen and len(recommended) < 6:
+            recommended.append({"question": q, "source": "你可能关心"})
+            seen.add(q)
+
+    return {"code": 0, "data": recommended}
