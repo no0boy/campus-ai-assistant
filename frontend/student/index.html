@@ -495,6 +495,8 @@
         <textarea id="userInput" rows="1"
                   placeholder="输入你的校园问题..."
                   onkeydown="handleKeyDown(event)"></textarea>
+        <button class="btn btn-ghost btn-sm" id="agentToggle" onclick="toggleAgentMode()"
+                title="Agent模式" style="padding:4px 8px;font-size:18px;">🔧</button>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">➤</button>
       </div>
       <div class="input-hint">AI 回答仅供参考，重要信息请以学校官方通知为准</div>

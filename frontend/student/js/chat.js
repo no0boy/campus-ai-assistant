@@ -6,8 +6,9 @@
 // ========== 全局状态 ==========
 let currentConversationId = null     // 当前对话 ID（null = 新对话）
 let conversations = []               // 对话历史列表 [{id, title, messages:[]}]
-let isWaiting = false                // 是否正在等待 AI 回复
-let currentAbortController = null    // 当前请求的中断控制器
+let isWaiting = false
+let currentAbortController = null
+let agentMode = false                // Agent 模式开关
 
 // ========== 页面初始化 ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,6 +34,18 @@ function initTheme() {
   const saved = localStorage.getItem('theme') || 'light'
   document.documentElement.setAttribute('data-theme', saved)
 }
+function toggleAgentMode() {
+  agentMode = !agentMode
+  const btn = document.getElementById('agentToggle')
+  if (agentMode) {
+    btn.style.background = '#3b82f6'; btn.style.color = '#fff'
+    btn.textContent = '🧠'; btn.title = 'Agent模式（思考-行动循环）'
+  } else {
+    btn.style.background = ''; btn.style.color = ''
+    btn.textContent = '🔧'; btn.title = '普通模式'
+  }
+}
+
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme')
   const next = current === 'dark' ? 'light' : 'dark'
@@ -385,7 +398,8 @@ async function sendMessage() {
     let searchMethod = '语义向量'
     let llmAvailable = true
 
-    const res = await apiChatAsk(question, currentConversationId, true, (chunk, answer) => {
+    const apiFn = agentMode ? apiChatAgent : apiChatAsk
+    const res = await apiFn(question, currentConversationId, true, (chunk, answer) => {
       fullAnswer = answer
       updateAIMessage(aiMsg, fullAnswer, false)
       scrollToBottom()

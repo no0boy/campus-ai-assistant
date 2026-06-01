@@ -174,6 +174,45 @@ function apiGetConversation(conversationId) {
   return request(`/api/chat/history/${conversationId}`)
 }
 
+/** Agent Think-Act 模式（流式） */
+async function apiChatAgent(question, conversationId, stream, onChunk, abortSignal, onAgent) {
+  const token = localStorage.getItem('token')
+  const response = await fetch(BASE_URL + '/api/chat/agent/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ question, stream: true }),
+    signal: abortSignal
+  })
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let fullAnswer = '', finalData = null
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break
+      const text = decoder.decode(value, { stream: true })
+      for (const line of text.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const payload = JSON.parse(line.slice(6))
+          if (payload.type === 'chunk') { fullAnswer += payload.text; onChunk(payload.text, fullAnswer) }
+          else if (payload.type === 'done') { finalData = payload }
+        } catch(e) {}
+      }
+    }
+  } catch(e) { if (e.name === 'AbortError') return { code: 0, aborted: true } }
+
+  return {
+    code: 0,
+    data: {
+      answer: fullAnswer,
+      sources: finalData?.sources || [],
+      search_method: finalData?.search_method || 'agent',
+    }
+  }
+}
+
 /** 提交反馈（赞/踩） */
 function apiFeedback(conversationId, messageId, feedback) {
   return request('/api/chat/feedback', {
