@@ -182,80 +182,57 @@
     </div>
   </div>
 
-  <!-- ===== 脚本 ===== -->
-  <script src="js/api.js?t=20250602"></script>
+  <!-- ===== 脚本（内联登录，不依赖外部JS缓存） ===== -->
   <script>
-    // ========== 主题管理 ==========
-    // 页面加载时读取之前保存的主题
+    // 内置 apiLogin — 零缓存依赖
+    async function apiLogin(username, password) {
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        })
+        return await r.json()
+      } catch (e) {
+        return { code: -1, message: '网络异常，请稍后再试' }
+      }
+    }
+
+    // 主题
     const savedTheme = localStorage.getItem('theme') || 'light'
     document.documentElement.setAttribute('data-theme', savedTheme)
-    updateThemeBtn()
-
     function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme')
-      const next = current === 'dark' ? 'light' : 'dark'
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
       document.documentElement.setAttribute('data-theme', next)
       localStorage.setItem('theme', next)
-      updateThemeBtn()
+      document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙'
     }
 
-    function updateThemeBtn() {
-      const btn = document.getElementById('themeBtn')
-      const theme = document.documentElement.getAttribute('data-theme')
-      btn.textContent = theme === 'dark' ? '☀️' : '🌙'
-    }
-
-    // ========== 登录逻辑 ==========
+    // 登录
     const form = document.getElementById('loginForm')
     const errorMsg = document.getElementById('errorMsg')
-    const submitBtn = document.getElementById('submitBtn')
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault()
-
-      const username = document.getElementById('username').value.trim()
-      const password = document.getElementById('password').value.trim()
-
-      if (!username || !password) {
-        showError('请填写用户名和密码')
-        return
-      }
-
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '登录中...' }
+      const u = document.getElementById('username').value.trim()
+      const p = document.getElementById('password').value.trim()
+      if (!u || !p) { errorMsg.textContent = '请填写用户名和密码'; errorMsg.style.display = 'block'; return }
       errorMsg.style.display = 'none'
-
-      try {
-        const res = await apiLogin(username, password)
-
-        if (res.code === 0) {
-          localStorage.setItem('token', res.data.token)
-          localStorage.setItem('user', JSON.stringify(res.data.user))
-          const role = res.data.user.role
-          if (role === 'admin') {
-            window.location.href = '../admin/index.html'
-          } else {
-            window.location.href = 'index.html'
-          }
-        } else {
-          showError(res.message || '登录失败，请检查用户名和密码')
-        }
-      } catch (err) {
-        showError('网络异常，请检查后端服务是否启动')
-      } finally {
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登 录' }
+      const res = await apiLogin(u, p)
+      if (res.code === 0) {
+        localStorage.setItem('token', res.data.token)
+        localStorage.setItem('user', JSON.stringify(res.data.user))
+        window.location.href = res.data.user.role === 'admin' ? '../admin/index.html' : 'index.html'
+      } else {
+        errorMsg.textContent = res.message || '登录失败'
+        errorMsg.style.display = 'block'
       }
     })
 
-    // 一键快速登录
-    async function quickLogin(username, password) {
-      document.getElementById('username').value = username
-      document.getElementById('password').value = password
+    async function quickLogin(u, p) {
+      document.getElementById('username').value = u
+      document.getElementById('password').value = p
       form.dispatchEvent(new Event('submit'))
-    }
-
-    function showError(msg) {
-      errorMsg.textContent = msg
-      errorMsg.style.display = 'block'
     }
   </script>
 </body>
