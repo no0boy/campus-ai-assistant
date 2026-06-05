@@ -3,237 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>登录 - 校园AI助手</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>登录 - 校园AI知识平台</title>
+  <link rel="stylesheet" href="css/style.css?_=20250603">
   <style>
-    /* ===== 登录页专属样式 ===== */
-    .login-wrapper {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: var(--bg-secondary);
-      padding: 20px;
-    }
-
-    .login-card {
-      width: 100%;
-      max-width: 420px;
-      background: var(--bg);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      padding: 40px 32px;
-      border: 1px solid var(--border);
-    }
-
-    .login-header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-
-    .login-logo {
-      width: 64px;
-      height: 64px;
-      background: linear-gradient(135deg, var(--primary), #7c3aed);
-      border-radius: var(--radius-md);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      margin-bottom: 16px;
-    }
-
-    .login-header h1 {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-
-    .login-header p {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-
-    .form-group {
-      margin-bottom: 20px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-
-    .input-icon {
-      position: relative;
-    }
-    .input-icon .icon {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 18px;
-      color: var(--text-light);
-    }
-    .input-icon input {
-      padding-left: 40px;
-    }
-
-    .login-btn {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
-      margin-top: 8px;
-    }
-
-    .login-footer {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-
-    .error-msg {
-      background: #fef2f2;
-      color: #dc2626;
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      margin-bottom: 16px;
-      display: none;
-    }
-
-    /* 暗色适配 */
-    [data-theme="dark"] .error-msg {
-      background: #450a0a;
-      color: #fca5a5;
-    }
-
-    .theme-toggle {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--bg);
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all var(--transition);
-    }
-    .theme-toggle:hover {
-      background: var(--bg-hover);
-    }
-
-    /* 移动端适配 */
-    @media (max-width: 480px) {
-      .login-card {
-        padding: 28px 20px;
-        box-shadow: none;
-        border: none;
-      }
-      .login-wrapper {
-        background: var(--bg);
-        padding: 0;
-      }
-    }
+    .login-wrapper { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg-secondary); padding: 20px; }
+    .login-card { width: 100%; max-width: 420px; background: var(--bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 40px 32px; border: 1px solid var(--border); }
+    .login-header { text-align: center; margin-bottom: 32px; }
+    .login-logo { width: 64px; height: 64px; background: linear-gradient(135deg, var(--primary), #7c3aed); border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 16px; }
+    .login-header h1 { font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .login-header p { font-size: 14px; color: var(--text-secondary); }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; background: var(--bg); color: var(--text); box-sizing: border-box; }
+    .login-btn { width: 100%; padding: 13px; font-size: 16px; border-radius: var(--radius-sm); cursor: pointer; border: none; margin-bottom: 8px; font-weight: 600; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-outline { background: #fff; color: #3b82f6; border: 2px solid #3b82f6; }
+    .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); font-size: 13px; padding: 10px; }
+    .error-msg { background: #fef2f2; color: #dc2626; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; display: none; }
+    .divider { text-align: center; margin: 16px 0; color: var(--text-light); font-size: 12px; }
   </style>
 </head>
 <body>
-
-  <!-- 主题切换按钮 -->
-  <button class="theme-toggle" onclick="toggleTheme()" title="切换主题" id="themeBtn">🌙</button>
-
-  <div class="login-wrapper">
-    <div class="login-card">
-      <!-- 头部 -->
-      <div class="login-header">
-        <div class="login-logo">🤖</div>
-        <h1>校园AI知识平台</h1>
-        <p>多Agent协作 · 混合检索 · 外部工具 · 智能问答</p>
-      </div>
-
-      <!-- 错误提示 -->
-      <div class="error-msg" id="errorMsg"></div>
-
-      <!-- 按钮（表单在下方隐藏） -->
-      <button type="button" class="btn btn-primary login-btn"
-              onclick="quickLogin('student','123456')"
-              style="font-size:16px;padding:13px;">
-        🚀 学生体验
-      </button>
-      <button type="button" class="btn btn-outline login-btn"
-              onclick="quickLogin('admin','admin123')"
-              style="margin-top:8px;font-size:16px;padding:13px;">
-        🔧 管理后台
-      </button>
-
-      <form id="loginForm" style="display:none;">
-        <input type="text" id="username">
-        <input type="password" id="password">
-      </form>
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo">🤖</div>
+      <h1>校园AI知识平台</h1>
+      <p>多Agent协作 · 混合检索 · 外部工具 · 智能问答</p>
     </div>
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="login-btn btn-primary" onclick="doLogin('student','123456')">🚀 学生体验</button>
+    <button class="login-btn btn-outline" onclick="doLogin('admin','admin123')">🔧 管理后台</button>
+    <div class="divider">或手动输入其他账号</div>
+    <div class="form-group"><input type="text" id="username" placeholder="用户名"></div>
+    <div class="form-group"><input type="password" id="password" placeholder="密码"></div>
+    <button class="login-btn btn-ghost" onclick="doLogin()">登 录</button>
   </div>
+</div>
 
-  <!-- ===== 脚本（内联登录，不依赖外部JS缓存） ===== -->
-  <script>
-    // 内置 apiLogin — 零缓存依赖
-    async function apiLogin(username, password) {
-      try {
-        const r = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        })
-        return await r.json()
-      } catch (e) {
-        return { code: -1, message: '网络异常，请稍后再试' }
-      }
-    }
+<script>
+async function doLogin(u, p) {
+  if (!u) { u = document.getElementById('username').value.trim(); p = document.getElementById('password').value.trim() }
+  if (!u || !p) { document.getElementById('errorMsg').textContent = '请填写用户名和密码'; document.getElementById('errorMsg').style.display = 'block'; return }
 
-    // 主题
-    const savedTheme = localStorage.getItem('theme') || 'light'
-    document.documentElement.setAttribute('data-theme', savedTheme)
-    function toggleTheme() {
-      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
-      document.documentElement.setAttribute('data-theme', next)
-      localStorage.setItem('theme', next)
-      document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙'
-    }
-
-    // 登录
-    const form = document.getElementById('loginForm')
-    const errorMsg = document.getElementById('errorMsg')
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault()
-      const u = document.getElementById('username').value.trim()
-      const p = document.getElementById('password').value.trim()
-      if (!u || !p) { errorMsg.textContent = '请填写用户名和密码'; errorMsg.style.display = 'block'; return }
-      errorMsg.style.display = 'none'
-      const res = await apiLogin(u, p)
-      if (res.code === 0) {
-        localStorage.setItem('token', res.data.token)
-        localStorage.setItem('user', JSON.stringify(res.data.user))
-        window.location.href = res.data.user.role === 'admin' ? '../admin/index.html' : 'index.html'
-      } else {
-        errorMsg.textContent = res.message || '登录失败'
-        errorMsg.style.display = 'block'
-      }
+  document.getElementById('errorMsg').style.display = 'none'
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: u, password: p})
     })
-
-    async function quickLogin(u, p) {
-      document.getElementById('username').value = u
-      document.getElementById('password').value = p
-      form.dispatchEvent(new Event('submit'))
+    const d = await r.json()
+    if (d.code === 0) {
+      localStorage.setItem('token', d.data.token)
+      localStorage.setItem('user', JSON.stringify(d.data.user))
+      window.location.href = d.data.user.role === 'admin' ? '../admin/index.html' : 'index.html'
+    } else {
+      document.getElementById('errorMsg').textContent = d.message || '登录失败'
+      document.getElementById('errorMsg').style.display = 'block'
     }
-  </script>
+  } catch(e) {
+    document.getElementById('errorMsg').textContent = '网络异常，请检查后端服务'
+    document.getElementById('errorMsg').style.display = 'block'
+  }
+}
+
+document.getElementById('password').addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin() })
+</script>
 </body>
 </html>
