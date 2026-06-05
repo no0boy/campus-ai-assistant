@@ -12,7 +12,7 @@ import os
 
 from database import init_db
 from routes import auth, chat, documents, stats, settings
-from routes import usage, user
+from routes import usage, user, webhook
 import config
 
 # ========== 创建 FastAPI 应用 ==========
@@ -21,6 +21,20 @@ app = FastAPI(
     description="基于 RAG 知识库的校园智能问答系统",
     version="3.0.0"
 )
+
+# ========== 请求日志中间件 ==========
+@app.middleware("http")
+async def log_requests(request, call_next):
+    import time, uuid
+    rid = str(uuid.uuid4())[:8]
+    start = time.time()
+    response = await call_next(request)
+    elapsed = int((time.time() - start) * 1000)
+    # 只打 API 请求日志
+    if "/api/" in str(request.url.path):
+        print(f"[API] rid={rid} {request.method} {request.url.path} → {response.status_code} ({elapsed}ms)")
+    response.headers["X-Request-ID"] = rid
+    return response
 
 # ========== CORS ==========
 app.add_middleware(
@@ -39,6 +53,7 @@ app.include_router(stats.router)
 app.include_router(settings.router)
 app.include_router(usage.router)
 app.include_router(user.router)
+app.include_router(webhook.router)
 
 # ========== 前端静态文件（部署用） ==========
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
