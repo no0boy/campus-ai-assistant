@@ -225,6 +225,37 @@ function apiFeedback(conversationId, messageId, feedback) {
   })
 }
 
+// ==================== Agent Think-Act 模式 ====================
+
+async function apiChatAgent(question, conversationId, stream, onChunk, abortSignal, onAgent) {
+  const token = localStorage.getItem('token')
+  const response = await fetch(BASE_URL + '/api/chat/agent/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ question, stream: true }),
+    signal: abortSignal
+  })
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let fullAnswer = '', finalData = null
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break
+      for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const p = JSON.parse(line.slice(6))
+          if (p.type === 'chunk') { fullAnswer += p.text; onChunk(p.text, fullAnswer) }
+          else if (p.type === 'done') { finalData = p }
+        } catch(e) {}
+      }
+    }
+  } catch(e) { if (e.name === 'AbortError') return { code: 0, aborted: true } }
+
+  return { code: 0, data: { answer: fullAnswer, sources: finalData?.sources || [], search_method: finalData?.search_method || 'agent' } }
+}
+
 // ==================== 文档模块 ====================
 
 /** 获取知识库文档列表（学生端只读） */
