@@ -37,6 +37,7 @@ class User(Base):
     username = Column(String(64), unique=True, nullable=False, index=True)
     password = Column(String(256), nullable=False)
     role = Column(String(16), default="student")
+    rbac_role_id = Column(Integer, default=0)  # 关联 rbac_roles
     avatar = Column(String(256), default="")
     # 用户画像
     grade = Column(String(16), default="")          # 大一/大二/大三/大四/研究生
@@ -76,6 +77,30 @@ class Conversation(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+# ========== RBAC 角色权限表 ==========
+class RbacRole(Base):
+    __tablename__ = "rbac_roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(32), unique=True, nullable=False)
+    permissions = Column(JSON, default={})  # {"chat":true,"admin":false,"api":false}
+
+
+# ========== 审计日志表 ==========
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, default=0, index=True)
+    username = Column(String(64), default="")
+    action = Column(String(64), default="")          # chat/login/upload/webhook
+    ip_address = Column(String(45), default="")
+    user_agent = Column(String(256), default="")
+    request_id = Column(String(16), default="")
+    detail = Column(JSON, default={})
+    created_at = Column(DateTime, default=datetime.now)
+
+
 # ========== Token 消耗日志表 ==========
 class UsageLog(Base):
     __tablename__ = "usage_logs"
@@ -96,6 +121,9 @@ class UsageLog(Base):
     cached = Column(Integer, default=0)
     success = Column(Integer, default=1)
     error_msg = Column(String(512), default="")
+    ip_address = Column(String(45), default="")
+    user_agent = Column(String(256), default="")
+    request_id = Column(String(16), default="")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -106,6 +134,18 @@ def init_db():
 
     db = SessionLocal()
     try:
+        # 初始化默认角色
+        if not db.query(RbacRole).first():
+            roles = [
+                RbacRole(name="admin", permissions={"chat":True,"admin":True,"api":True,"webhook":True}),
+                RbacRole(name="teacher", permissions={"chat":True,"admin":True,"api":True,"webhook":False}),
+                RbacRole(name="student", permissions={"chat":True,"admin":False,"api":False,"webhook":False}),
+                RbacRole(name="guest", permissions={"chat":True,"admin":False,"api":False,"webhook":False}),
+            ]
+            db.add_all(roles)
+            db.commit()
+            print("[OK] 默认角色已创建: admin/teacher/student/guest")
+
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
             admin = User(

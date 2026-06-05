@@ -662,6 +662,11 @@ def agent_ask(question: str, conversation_history: list[dict] = None) -> dict:
     search_method = "agent"
     sources_all = []
 
+    # 工作流上下文注入
+    from services.workflow_engine import execute_workflow
+    workflow_hints = execute_workflow(question)
+    context_parts.append(workflow_hints)
+
     # LLM 不可用时直接降级
     if not llm:
         from services.rag_service import ask

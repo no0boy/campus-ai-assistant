@@ -12,7 +12,7 @@ import os
 
 from database import init_db
 from routes import auth, chat, documents, stats, settings
-from routes import usage, user, webhook
+from routes import usage, user, webhook, rbac_admin
 import config
 
 # ========== 创建 FastAPI 应用 ==========
@@ -22,7 +22,7 @@ app = FastAPI(
     version="3.0.0"
 )
 
-# ========== 请求日志中间件 ==========
+# ========== 请求日志 + 审计中间件 ==========
 @app.middleware("http")
 async def log_requests(request, call_next):
     import time, uuid
@@ -30,9 +30,29 @@ async def log_requests(request, call_next):
     start = time.time()
     response = await call_next(request)
     elapsed = int((time.time() - start) * 1000)
-    # 只打 API 请求日志
-    if "/api/" in str(request.url.path):
-        print(f"[API] rid={rid} {request.method} {request.url.path} → {response.status_code} ({elapsed}ms)")
+
+    path = str(request.url.path)
+    if "/api/" in path:
+        print(f"[API] rid={rid} {request.method} {path} → {response.status_code} ({elapsed}ms)")
+
+        # 写审计日志（只记录关键操作）
+        if any(path.startswith(p) for p in ["/api/chat","/api/documents","/api/webhook","/api/auth/login"]):
+            try:
+                from database import SessionLocal, AuditLog
+                adb = SessionLocal()
+                action_map = {"/api/chat": "chat", "/api/documents": "doc", "/api/webhook": "webhook", "/api/auth/login": "login"}
+                action = next((v for k,v in action_map.items() if path.startswith(k)), "api")
+                log = AuditLog(
+                    action=action,
+                    ip_address=request.client.host if request.client else "",
+                    user_agent=request.headers.get("user-agent", "")[:256],
+                    request_id=rid,
+                    detail={"method": request.method, "path": path, "status": response.status_code, "elapsed_ms": elapsed}
+                )
+                adb.add(log); adb.commit(); adb.close()
+            except Exception:
+                pass
+
     response.headers["X-Request-ID"] = rid
     return response
 
@@ -54,6 +74,7 @@ app.include_router(settings.router)
 app.include_router(usage.router)
 app.include_router(user.router)
 app.include_router(webhook.router)
+app.include_router(rbac_admin.router)
 
 # ========== 前端静态文件（部署用） ==========
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")

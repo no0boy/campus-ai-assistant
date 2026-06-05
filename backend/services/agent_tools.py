@@ -88,6 +88,15 @@ TOOLS = {
     },
 }
 
+# 合并校园工具
+from services.campus_tools import CAMPUS_TOOLS
+for name, info in CAMPUS_TOOLS.items():
+    TOOLS[name] = {
+        "fn": info["fn"],
+        "desc": info["desc"],
+        "example": f"TOOL: {name}",
+    }
+
 TOOL_DESCRIPTIONS = "\n".join([
     f"- {name}：{info['desc']}（例如：{info['example']}）"
     for name, info in TOOLS.items()
