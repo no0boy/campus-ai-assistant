@@ -15,7 +15,7 @@ const BASE_URL = ''
  * 带重试的 fetch 封装
  * 自动重试网络错误（最多 retries 次），每次间隔递增
  */
-async function fetchWithRetry(url, options = {}, retries = 2) {
+async function fetchWithRetry(url, options = {}, retries = 5) {
   for (let i = 0; i <= retries; i++) {
     // 如果用户点了停止，不重试
     if (options.signal && options.signal.aborted) throw new DOMException('Aborted', 'AbortError')
@@ -27,11 +27,12 @@ async function fetchWithRetry(url, options = {}, retries = 2) {
       if (error.name === 'AbortError') throw error
       // 最后一次重试仍失败 → 抛出
       if (i === retries) throw error
-      // 等待递增延迟：1.5s → 3s → 4.5s
-      const delay = (i + 1) * 1500
+      // 等待递增延迟：2s → 5s → 8s → 12s → 16s（总计约 43s，覆盖 HF 冷启动）
+      const delays = [2, 5, 8, 12, 16]
+      const delay = (delays[i] || 3) * 1000
       console.warn(`[fetch] 请求失败，${delay/1000}s 后重试 (${i+1}/${retries})...`, error.message)
-      // 通知外部 "正在唤醒服务器"
-      if (window._onRetry) window._onRetry(i + 1, retries)
+      // 通知外部
+      if (window._onRetry) window._onRetry(i + 1, retries, delay)
       // 可被 abort 中断的等待
       await new Promise((r, reject) => {
         const t = setTimeout(r, delay)

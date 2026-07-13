@@ -41,11 +41,11 @@ function wakeUpBackend() {
 }
 
 // 重试回调：api-v3.js 重试时调用，更新界面状态
-window._onRetry = function(attempt, total) {
+window._onRetry = function(attempt, total, delayMs) {
   const msgs = document.querySelectorAll('.msg-bubble.ai .typing-dot')
   if (msgs.length > 0) {
     const msgDiv = msgs[msgs.length - 1].closest('.message')
-    if (msgDiv) updateAIStatus(msgDiv, `正在唤醒服务器...（${attempt}/${total}）`)
+    if (msgDiv) updateAIStatus(msgDiv, `正在唤醒服务器...（${attempt}/${total}，${Math.round(delayMs/1000)}秒后重试）`)
   }
 }
 
