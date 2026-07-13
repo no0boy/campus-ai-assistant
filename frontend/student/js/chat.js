@@ -9,6 +9,7 @@ let conversations = []               // 对话历史列表 [{id, title, messages
 let isWaiting = false
 let currentAbortController = null
 let agentMode = false                // Agent 模式开关
+let lastQuestion = ''                // 上一个问题（用于重试）
 
 // ========== 页面初始化 ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,12 +21,31 @@ document.addEventListener('DOMContentLoaded', () => {
   checkWelcome()
   loadRecommendations()
   autoResizeTextarea()
+  wakeUpBackend()                    // 预热后端
 })
 
 /** 登录态检查 — 没登录跳回登录页 */
 function checkAuth() {
   if (!localStorage.getItem('token')) {
     window.location.href = 'login.html'
+  }
+}
+
+/** 预热后端 — 页面加载时先 ping，唤醒可能休眠的服务 */
+function wakeUpBackend() {
+  fetch(BASE_URL + '/health').then(r => r.json()).then(d => {
+    if (d.status === 'ok') console.log('[wake] 后端就绪')
+  }).catch(() => {
+    console.warn('[wake] 后端未响应，将在首次请求时自动重试')
+  })
+}
+
+// 重试回调：api-v3.js 重试时调用，更新界面状态
+window._onRetry = function(attempt, total) {
+  const msgs = document.querySelectorAll('.msg-bubble.ai .typing-dot')
+  if (msgs.length > 0) {
+    const msgDiv = msgs[msgs.length - 1].closest('.message')
+    if (msgDiv) updateAIStatus(msgDiv, `正在唤醒服务器...（${attempt}/${total}）`)
   }
 }
 
@@ -377,6 +397,9 @@ async function sendMessage() {
   appendMessage('user', question)
   scrollToBottom()
 
+  // 保存问题用于重试
+  lastQuestion = question
+
   // 解析用户画像
   const profileWasIncomplete = !userProfile.profile_complete
   const justCompleted = tryParseProfile(question)
@@ -488,7 +511,14 @@ async function sendMessage() {
       updateAIMessage(aiMsg, '抱歉，出了点问题：' + ((res && res.message) || '未知错误'), true)
     }
   } catch (err) {
-    updateAIMessage(aiMsg, '抱歉，网络连接失败，请检查后端服务是否已启动。', true)
+    if (err && err.name === 'AbortError') {
+      updateAIMessage(aiMsg, '*[已停止生成]*', true)
+    } else {
+      updateAIMessage(aiMsg,
+        '抱歉，无法连接到服务器。\n\n> 💡 **提示**：免费部署的服务可能处于休眠状态，点击下方按钮重试。', true)
+      // 添加重试按钮
+      addRetryButton(aiMsg)
+    }
   } finally {
     isWaiting = false
     currentAbortController = null
@@ -617,6 +647,29 @@ function addMessageActions(msgDiv) {
     <button class="msg-action" onclick="feedbackMessage(this, 1)" title="有用">👍</button>
     <button class="msg-action" onclick="feedbackMessage(this, -1)" title="没用">👎</button>
   `
+}
+
+/** 添加重试按钮 */
+function addRetryButton(msgDiv) {
+  const actionsEl = msgDiv.querySelector('.msg-actions')
+  actionsEl.style.display = 'flex'
+  actionsEl.innerHTML = `
+    <button class="msg-action" onclick="retryLastMessage(this)" title="重新发送"
+            style="color:#fff;background:var(--primary);padding:6px 16px;border-radius:14px;font-size:13px;font-weight:500;">
+      🔄 重试
+    </button>
+  `
+}
+
+/** 重试上一次失败的问题 */
+function retryLastMessage(btn) {
+  if (!lastQuestion || isWaiting) return
+  // 移除失败的 AI 消息
+  const msgDiv = btn.closest('.message')
+  if (msgDiv) msgDiv.remove()
+  // 重新发送
+  document.getElementById('userInput').value = lastQuestion
+  sendMessage()
 }
 
 // ========== 消息操作 ==========

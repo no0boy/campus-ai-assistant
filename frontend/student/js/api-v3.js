@@ -9,6 +9,40 @@ const isLocal = window.location.hostname === '127.0.0.1' || window.location.host
 // 一体部署时前后端同端口，直接空 BASE_URL 即可
 const BASE_URL = ''
 
+// ==================== 重试 & 超时工具 ====================
+
+/**
+ * 带重试的 fetch 封装
+ * 自动重试网络错误（最多 retries 次），每次间隔递增
+ */
+async function fetchWithRetry(url, options = {}, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    // 如果用户点了停止，不重试
+    if (options.signal && options.signal.aborted) throw new DOMException('Aborted', 'AbortError')
+    try {
+      const response = await fetch(url, options)
+      return response
+    } catch (error) {
+      // 用户主动停止 → 不重试
+      if (error.name === 'AbortError') throw error
+      // 最后一次重试仍失败 → 抛出
+      if (i === retries) throw error
+      // 等待递增延迟：1.5s → 3s → 4.5s
+      const delay = (i + 1) * 1500
+      console.warn(`[fetch] 请求失败，${delay/1000}s 后重试 (${i+1}/${retries})...`, error.message)
+      // 通知外部 "正在唤醒服务器"
+      if (window._onRetry) window._onRetry(i + 1, retries)
+      // 可被 abort 中断的等待
+      await new Promise((r, reject) => {
+        const t = setTimeout(r, delay)
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')) }, { once: true })
+        }
+      })
+    }
+  }
+}
+
 /**
  * 通用请求函数
  * @param {string} path   - 接口路径，如 '/api/chat/ask'
@@ -28,7 +62,7 @@ async function request(path, options = {}) {
   }
 
   try {
-    const response = await fetch(url, config)
+    const response = await fetchWithRetry(url, config)
 
     // 401 未登录，跳转登录页
     if (response.status === 401) {
@@ -77,7 +111,7 @@ async function apiChatAsk(question, conversationId = null, stream = true, onChun
   // 流式请求
   if (stream && onChunk) {
     const token = localStorage.getItem('token')
-    const response = await fetch(BASE_URL + '/api/chat/ask', {
+    const response = await fetchWithRetry(BASE_URL + '/api/chat/ask', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -177,7 +211,7 @@ function apiGetConversation(conversationId) {
 /** Agent Think-Act 模式（流式） */
 async function apiChatAgent(question, conversationId, stream, onChunk, abortSignal, onAgent) {
   const token = localStorage.getItem('token')
-  const response = await fetch(BASE_URL + '/api/chat/agent/stream', {
+  const response = await fetchWithRetry(BASE_URL + '/api/chat/agent/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ question, stream: true }),
@@ -229,7 +263,7 @@ function apiFeedback(conversationId, messageId, feedback) {
 
 async function apiChatAgent(question, conversationId, stream, onChunk, abortSignal, onAgent) {
   const token = localStorage.getItem('token')
-  const response = await fetch(BASE_URL + '/api/chat/agent/stream', {
+  const response = await fetchWithRetry(BASE_URL + '/api/chat/agent/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ question, stream: true }),
