@@ -499,6 +499,8 @@ async function sendMessage() {
 
       if (hasContent) {
         saveMessage(question, fullAnswer || d.answer, sources)
+        // 写入离线缓存 — 下次同样问题秒回
+        cacheAnswer(question, { answer: fullAnswer || d.answer, sources, search_method: searchMethod })
         if (!currentConversationId) {
           currentConversationId = 'conv_' + Date.now()
           const title = question.length > 20 ? question.slice(0, 20) + '...' : question
@@ -514,10 +516,38 @@ async function sendMessage() {
     if (err && err.name === 'AbortError') {
       updateAIMessage(aiMsg, '*[已停止生成]*', true)
     } else {
-      updateAIMessage(aiMsg,
-        '抱歉，无法连接到服务器。\n\n> 💡 **提示**：免费部署的服务可能处于休眠状态，点击下方按钮重试。', true)
-      // 添加重试按钮
-      addRetryButton(aiMsg)
+      // 后端不可用 → 先查离线缓存
+      const cached = getCachedAnswer(question)
+      if (cached) {
+        const aiBubble = aiMsg.querySelector('.msg-bubble.ai')
+        aiBubble.innerHTML = renderContent(cached.answer, 'ai')
+        updateAIStatus(aiMsg, '⚡ 离线缓存' + (cached.fromFAQ ? '（预设答案）' : '（历史记录）'))
+
+        if (cached.sources && cached.sources.length > 0) addSources(aiMsg, cached.sources)
+
+        // 添加操作按钮 + 缓存标记
+        const actionsEl = aiMsg.querySelector('.msg-actions')
+        actionsEl.style.display = 'flex'
+        actionsEl.innerHTML = `
+          <button class="msg-action" onclick="copyMessage(this)" title="复制回答">📋</button>
+          <span style="font-size:11px;color:var(--text-light);padding:4px 8px;">
+            ⚡ 离线缓存 · 后端就绪后刷新可得更新答案
+          </span>
+        `
+        // 保存到对话
+        saveMessage(question, cached.answer, cached.sources || [])
+        if (!currentConversationId) {
+          currentConversationId = 'conv_' + Date.now()
+          const title = question.length > 20 ? question.slice(0, 20) + '...' : question
+          conversations.unshift({ id: currentConversationId, title: title, messages: [] })
+        }
+        updateCurrentConv(question, cached.answer, cached.sources || [])
+        renderChatList()
+      } else {
+        updateAIMessage(aiMsg,
+          '抱歉，无法连接到服务器。\n\n> 💡 **提示**：免费部署的服务可能处于休眠状态，点击下方按钮重试。', true)
+        addRetryButton(aiMsg)
+      }
     }
   } finally {
     isWaiting = false
