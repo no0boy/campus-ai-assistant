@@ -8,7 +8,6 @@ let currentConversationId = null     // 当前对话 ID（null = 新对话）
 let conversations = []               // 对话历史列表 [{id, title, messages:[]}]
 let isWaiting = false
 let currentAbortController = null
-let agentMode = false                // Agent 模式开关
 let lastQuestion = ''                // 上一个问题（用于重试）
 
 // ========== 页面初始化 ==========
@@ -22,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRecommendations()
   autoResizeTextarea()
   wakeUpBackend()                    // 预热后端
+  updateRemainingDisplay()           // 显示剩余次数
 })
 
 /** 登录态检查 — 没登录跳回登录页 */
@@ -54,27 +54,6 @@ function initTheme() {
   const saved = localStorage.getItem('theme') || 'light'
   document.documentElement.setAttribute('data-theme', saved)
 }
-function toggleAgentMode() {
-  agentMode = !agentMode
-  // 更新侧边栏开关
-  const sw = document.getElementById('agentSwitch')
-  if (sw) {
-    if (agentMode) sw.classList.add('agent-on')
-    else sw.classList.remove('agent-on')
-  }
-  // 更新输入框旁的按钮
-  const btn = document.getElementById('agentToggle')
-  if (btn) {
-    if (agentMode) {
-      btn.style.background = '#8b5cf6'; btn.style.color = '#fff'
-      btn.textContent = '🧠'
-    } else {
-      btn.style.background = ''; btn.style.color = ''
-      btn.textContent = '🔧'
-    }
-  }
-}
-
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme')
   const next = current === 'dark' ? 'light' : 'dark'
@@ -415,23 +394,61 @@ async function sendMessage() {
     return
   }
 
+  // ===== ① 优先查离线缓存 =====
+  const cached = getCachedAnswer(question)
+  if (cached) {
+    const aiMsg = appendMessage('ai', '', [], true)
+    const aiBubble = aiMsg.querySelector('.msg-bubble.ai')
+    aiBubble.innerHTML = renderContent(cached.answer, 'ai')
+    updateAIStatus(aiMsg, '⚡ 离线缓存（不计次数）')
+
+    if (cached.sources && cached.sources.length > 0) addSources(aiMsg, cached.sources)
+    addCacheActions(aiMsg)
+    scrollToBottom()
+
+    // 保存到对话
+    saveMessage(question, cached.answer, cached.sources || [])
+    if (!currentConversationId) {
+      currentConversationId = 'conv_' + Date.now()
+      const title = question.length > 20 ? question.slice(0, 20) + '...' : question
+      conversations.unshift({ id: currentConversationId, title: title, messages: [] })
+    }
+    updateCurrentConv(question, cached.answer, cached.sources || [])
+    renderChatList()
+    updateRemainingDisplay()
+    return
+  }
+
+  // ===== ② 检查提问次数 =====
+  const qCount = getQuestionCount()
+  const Q_LIMIT = 5
+  if (qCount >= Q_LIMIT) {
+    appendMessage('ai',
+      '🚫 **今日提问次数已用完**（5/5）\n\n' +
+      '> 💡 免费 Demo 每个设备限 5 次新问题。已问过的问题可从缓存中秒回，不计次数。\n\n' +
+      '如需重置，请清除浏览器 localStorage 后刷新页面。', [], false)
+    scrollToBottom()
+    return
+  }
+
+  // ===== ③ 调用 Agent API =====
   // 显示加载状态：正在检索
   const aiMsg = appendMessage('ai', '', [], true)
-  updateAIStatus(aiMsg, '检索知识库中')
+  updateAIStatus(aiMsg, 'Agent 思考中...（剩余 ' + (Q_LIMIT - qCount) + ' 次）')
+  updateRemainingDisplay()
 
   isWaiting = true
   currentAbortController = new AbortController()
   toggleStopBtn(true)  // 显示停止按钮
 
   try {
-    // 调用流式 API，传入 abort signal
+    // 统一使用 Agent Think-Act 模式
     let fullAnswer = ''
     let sources = []
-    let searchMethod = '语义向量'
+    let searchMethod = 'agent'
     let llmAvailable = true
 
-    const apiFn = agentMode ? apiChatAgent : apiChatAsk
-    const res = await apiFn(question, currentConversationId, true, (chunk, answer) => {
+    const res = await apiChatAgent(question, currentConversationId, true, (chunk, answer) => {
       fullAnswer = answer
       updateAIMessage(aiMsg, fullAnswer, false)
       scrollToBottom()
@@ -441,19 +458,18 @@ async function sendMessage() {
         roleEl.innerHTML = agentEmoji + ' <strong>' + agentName + '</strong> 回答中...'
         roleEl.style.color = 'var(--primary)'
       }
-      // 插入 Agent 来源卡片
       const card = document.createElement('div')
       card.className = 'agent-card'
       card.innerHTML = `
         <div class="agent-card-icon">${agentEmoji || '🤖'}</div>
         <div class="agent-card-info">
           <div class="agent-card-name">${agentName}</div>
-          <div class="agent-card-model">专属Agent · 检索中...</div>
+          <div class="agent-card-model">专属Agent · Think-Act 模式</div>
         </div>
       `
       const contentEl = aiMsg.querySelector('.msg-content')
       contentEl.insertBefore(card, contentEl.querySelector('.msg-sources'))
-      updateAIStatus(aiMsg, '检索知识库中...')
+      updateAIStatus(aiMsg, 'Agent 检索中...（剩余 ' + (Q_LIMIT - qCount - 1) + ' 次）')
     })
 
     if (res && res.code === 0) {
@@ -501,6 +517,9 @@ async function sendMessage() {
         saveMessage(question, fullAnswer || d.answer, sources)
         // 写入离线缓存 — 下次同样问题秒回
         cacheAnswer(question, { answer: fullAnswer || d.answer, sources, search_method: searchMethod })
+        // 新问题计数 +1
+        incrementQuestionCount()
+        updateRemainingDisplay()
         if (!currentConversationId) {
           currentConversationId = 'conv_' + Date.now()
           const title = question.length > 20 ? question.slice(0, 20) + '...' : question
@@ -516,38 +535,9 @@ async function sendMessage() {
     if (err && err.name === 'AbortError') {
       updateAIMessage(aiMsg, '*[已停止生成]*', true)
     } else {
-      // 后端不可用 → 先查离线缓存
-      const cached = getCachedAnswer(question)
-      if (cached) {
-        const aiBubble = aiMsg.querySelector('.msg-bubble.ai')
-        aiBubble.innerHTML = renderContent(cached.answer, 'ai')
-        updateAIStatus(aiMsg, '⚡ 离线缓存' + (cached.fromFAQ ? '（预设答案）' : '（历史记录）'))
-
-        if (cached.sources && cached.sources.length > 0) addSources(aiMsg, cached.sources)
-
-        // 添加操作按钮 + 缓存标记
-        const actionsEl = aiMsg.querySelector('.msg-actions')
-        actionsEl.style.display = 'flex'
-        actionsEl.innerHTML = `
-          <button class="msg-action" onclick="copyMessage(this)" title="复制回答">📋</button>
-          <span style="font-size:11px;color:var(--text-light);padding:4px 8px;">
-            ⚡ 离线缓存 · 后端就绪后刷新可得更新答案
-          </span>
-        `
-        // 保存到对话
-        saveMessage(question, cached.answer, cached.sources || [])
-        if (!currentConversationId) {
-          currentConversationId = 'conv_' + Date.now()
-          const title = question.length > 20 ? question.slice(0, 20) + '...' : question
-          conversations.unshift({ id: currentConversationId, title: title, messages: [] })
-        }
-        updateCurrentConv(question, cached.answer, cached.sources || [])
-        renderChatList()
-      } else {
-        updateAIMessage(aiMsg,
-          '抱歉，无法连接到服务器。\n\n> 💡 **提示**：免费部署的服务可能处于休眠状态，点击下方按钮重试。', true)
-        addRetryButton(aiMsg)
-      }
+      updateAIMessage(aiMsg,
+        '抱歉，无法连接到服务器。\n\n> 💡 **提示**：免费部署的服务可能处于休眠状态，点击下方按钮重试。', true)
+      addRetryButton(aiMsg)
     }
   } finally {
     isWaiting = false
@@ -784,6 +774,52 @@ function autoResizeTextarea() {
     ta.style.height = 'auto'
     ta.style.height = Math.min(ta.scrollHeight, 150) + 'px'
   })
+}
+
+// ========== 提问次数管理（localStorage）==========
+
+function getQuestionCount() {
+  try {
+    return parseInt(localStorage.getItem('qa_question_count') || '0', 10)
+  } catch(e) { return 0 }
+}
+
+function incrementQuestionCount() {
+  try {
+    const count = getQuestionCount()
+    localStorage.setItem('qa_question_count', String(count + 1))
+    // 同时存个时间戳，24h 后自动重置
+    const lastReset = parseInt(localStorage.getItem('qa_count_ts') || '0', 10)
+    if (Date.now() - lastReset > 86400000) {
+      // 超过 24 小时，重置计数
+      localStorage.setItem('qa_question_count', '1')
+      localStorage.setItem('qa_count_ts', String(Date.now()))
+    } else if (!lastReset) {
+      localStorage.setItem('qa_count_ts', String(Date.now()))
+    }
+    return true
+  } catch(e) { return false }
+}
+
+/** 缓存消息的操作按钮 */
+function addCacheActions(aiMsg) {
+  const actionsEl = aiMsg.querySelector('.msg-actions')
+  actionsEl.style.display = 'flex'
+  actionsEl.innerHTML = `
+    <button class="msg-action" onclick="copyMessage(this)" title="复制回答">📋</button>
+    <span style="font-size:11px;color:var(--text-light);padding:4px 8px;">
+      ⚡ 离线缓存 · 不计次数
+    </span>
+  `
+}
+
+/** 更新剩余次数显示 */
+function updateRemainingDisplay() {
+  const hint = document.querySelector('.input-hint')
+  if (hint) {
+    const remaining = Math.max(0, 5 - getQuestionCount())
+    hint.textContent = 'Agent Think-Act 模式 · 剩余 ' + remaining + ' 次新问题 · 重复问题缓存秒回'
+  }
 }
 
 // ========== 退出登录 ==========

@@ -460,13 +460,6 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo"><span>🤖</span>校园AI知识平台</div>
-      <div class="agent-switch" id="agentSwitch" onclick="toggleAgentMode()">
-        <div class="agent-switch-track">
-          <span class="agent-switch-label left active">普通</span>
-          <span class="agent-switch-thumb"></span>
-          <span class="agent-switch-label right">Agent</span>
-        </div>
-      </div>
       <button class="new-chat-btn" onclick="newChat()">＋ 新建对话</button>
     </div>
 
@@ -538,8 +531,6 @@
         <textarea id="userInput" rows="1"
                   placeholder="输入你的校园问题..."
                   onkeydown="handleKeyDown(event)"></textarea>
-        <button class="btn btn-ghost btn-sm" id="agentToggle" onclick="toggleAgentMode()"
-                title="Agent模式" style="padding:4px 8px;font-size:18px;">🔧</button>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">➤</button>
       </div>
       <div class="input-hint">AI 回答仅供参考，重要信息请以学校官方通知为准</div>
